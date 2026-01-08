@@ -33,13 +33,22 @@ if src_dir.exists() and str(src_dir) not in sys.path:
     # Prefer src/ when it exists (modules placed there)
     sys.path.insert(0, str(src_dir))
 
-from data_loader import DataLoader
-from preprocessing import Preprocessor
-from genre_classifier import GenreClassifier
-from popularity_predictor import PopularityPredictor
-from lyrics_analyzer import LyricsAnalyzer
-from mood_clustering import MoodClusterer
-from eda import EDAanalyser
+try:
+    # Try relative imports when module is part of a package
+    from .data_loader import DataLoader
+    from .preprocessing import Preprocessor
+    from .genre_classifier import GenreClassifier
+    from .mood_clustering import MoodClusterer
+    from .popularity_predictor import PopularityPredictor
+    from .lyrics_analyzer import LyricsAnalyzer
+except Exception:
+    # Fallback for running as a standalone script
+    from data_loader import DataLoader
+    from preprocessing import Preprocessor
+    from genre_classifier import GenreClassifier
+    from mood_clustering import MoodClusterer
+    from popularity_predictor import PopularityPredictor
+    from lyrics_analyzer import LyricsAnalyzer
 
 
 

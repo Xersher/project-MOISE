@@ -39,13 +39,20 @@ except Exception:
     from popularity_predictor import PopularityPredictor
     from lyrics_analyzer import LyricsAnalyzer
 
+# Compute repository root and sensible defaults relative to this file
+REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_DATA_DIR = str(REPO_ROOT / 'data')
+DEFAULT_OUTPUT_DIR = str(REPO_ROOT / 'results')
+
+
 class MOISEPipeline:
     """
     Main pipeline class for MOISE project.
     Orchestrates all analysis modules.
     """
     
-    def __init__(self, data_dir: str='/files/project-MOISE/data', output_dir: str='/files/project-MOISE/results') -> None:
+    #def __init__(self, data_dir: str='/files/project-MOISE/data', output_dir: str='/files/project-MOISE/results') -> None:
+    def __init__(self, data_dir: str = None, output_dir: str = None) -> None:
         """
         Initialize the MOISE pipeline.
         
@@ -53,6 +60,12 @@ class MOISEPipeline:
             data_dir (str): Directory containing datasets
             output_dir (str): Directory for results and reports
         """
+        # Default to repository-local data/results if not provided
+        if data_dir is None:
+            data_dir = DEFAULT_DATA_DIR
+        if output_dir is None:
+            output_dir = DEFAULT_OUTPUT_DIR
+
         self.data_dir = Path(data_dir)
         self.output_dir = Path(output_dir)
         
@@ -516,10 +529,10 @@ Mood Clustering uses the Circumplex Model of Affect (Russell, 1980):
                        help='Run lyrics analysis')
     
     # Directory options
-    parser.add_argument('--data-dir', default='/files/project-MOISE/data',
-                       help='Directory containing datasets (default: data)')
-    parser.add_argument('--output-dir', default='/files/project-MOISE/results',
-                       help='Directory for results (default: results)')
+    parser.add_argument('--data-dir', default=DEFAULT_DATA_DIR,
+                       help=f'Directory containing datasets (default: {DEFAULT_DATA_DIR})')
+    parser.add_argument('--output-dir', default=DEFAULT_OUTPUT_DIR,
+                       help=f'Directory for results (default: {DEFAULT_OUTPUT_DIR})')
     
     # Analysis options
     args = parser.parse_args()

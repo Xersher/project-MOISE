@@ -22,10 +22,16 @@ import argparse
 import sys
 from pathlib import Path
 
-# Add project root to path so local modules can be imported when running from other CWDs
+# Add project root and src to path so local modules can be imported when running from other CWDs
 project_root = Path(__file__).parent.resolve()
 src_dir = project_root / 'src'
-sys.path.insert(0, str(src_dir if src_dir.exists() else project_root))
+
+# Ensure both project root and src (if present) are available on sys.path so imports work
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+if src_dir.exists() and str(src_dir) not in sys.path:
+    # Prefer src/ when it exists (modules placed there)
+    sys.path.insert(0, str(src_dir))
 
 from data_loader import DataLoader
 from preprocessing import Preprocessor
@@ -443,10 +449,13 @@ Pipeline steps:
     )
     
     # Directory options
-    parser.add_argument('--data-dir', default='/files/project-MOISE/data',
-                       help='Directory containing datasets (default: data)')
-    parser.add_argument('--output-dir', default='/files/project-MOISE/results',
-                       help='Directory for results (default: results)')
+    default_data_dir = str(project_root / 'data')
+    default_output_dir = str(project_root / 'results')
+
+    parser.add_argument('--data-dir', default=default_data_dir,
+                   help=f'Directory containing datasets (default: {default_data_dir})')
+    parser.add_argument('--output-dir', default=default_output_dir,
+                   help=f'Directory for results (default: {default_output_dir})')
     
     args = parser.parse_args()
     

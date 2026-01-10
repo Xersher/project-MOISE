@@ -1,13 +1,37 @@
+"""
+Exploratory Data Analysis Module
+================================
+
+This module performs exploratory data analysis on the MOISE datasets:
+- GTZAN: Genre distribution analysis
+- Spotify: Audio features distribution
+- Lyrics: Text length and artist analysis
+"""
+
 from pathlib import Path
-import pandas as pd
-import matplotlib.pyplot as plt
 from typing import Union, Optional
 
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
 class EDAanalyser:
+    """
+    Class for performing exploratory data analysis on music datasets.
 
-    """This class performs exploratory data analysis on the dataset."""
+    Provides methods to analyze and visualize the GTZAN, Spotify, and
+    Lyrics datasets, generating summary statistics and distribution plots.
 
-    def __init__(self, output_directory: Union[str, Path]='files/project-MOISE/results/figures') -> None:
+    Attributes
+    ----------
+    output_directory : Path
+        Directory to save the generated figures
+    """
+
+    def __init__(
+        self,
+        output_directory: Union[str, Path] = 'files/project-MOISE/results/figures'
+        ) -> None:
 
         """
         This method initializes the EDAanalyser class.
@@ -19,27 +43,29 @@ class EDAanalyser:
             None
         """
 
-        self.output_directory = Path(output_directory)
+        self.output_directory: Path = Path(output_directory)
         self.output_directory.mkdir(parents=True, exist_ok=True)
-        print(f"The figues are saved to: {self.output_directory}")
+        print(f"Figures are saved to: {self.output_directory}")
 
-    def infos_about_dataset(self, data: pd.DataFrame, dataset_name: str='dataset') -> None:
-
+    def infos_about_dataset(self, data: pd.DataFrame, dataset_name: str = 'dataset') -> None:
         """
-        Prints basic information about the dataset.
+        Print basic information about a dataset.
 
-        Args:
-            data: The dataset as a pandas DataFrame.
-            dataset_name: Name used when printing information (for context).
+        Displays shape, data types, missing values, and numerical
+        feature summary statistics.
 
-        Returns:
-            None
+        Parameters
+        ----------
+        data : pd.DataFrame
+            The dataset to analyze
+        dataset_name : str, default='dataset'
+            Name used when printing information (for context)
         """
 
         print(f"Basic information about the {dataset_name}:")
         print("-"*70 + "\n")
-        print("\nShape : {data_shape}\n")
-        print("\nData Types:")
+        print(f"\nShape : {data.shape}\n")
+        print(f"\nData Types:")
         print(data.dtypes.value_counts())
         
         print("\nMissing Values:")
@@ -52,18 +78,31 @@ class EDAanalyser:
         print(data.describe())
 
 
-    def analyze_gtzan(self, gtzan_data: pd.DataFrame, save_figs: bool=True, show: bool= False) -> None:
-        
+    def analyze_gtzan(
+        self,
+        gtzan_data: pd.DataFrame,
+        save_figs: bool = True,
+        show: bool = False
+        ) -> plt.Figure:
         """
-        Perform EDA on GTZAN dataset. save_figs is a boolean to save the figures or not.
-        
-        Arguments:
-            gtzan_data (pd.DataFrame): GTZAN data
-            save_figs (bool): Whether to save figures
-            show (bool): Whether to display figures
+        Perform EDA on GTZAN dataset.
 
-        Returns:
-            None
+        Generates genre distribution visualizations including bar chart
+        and pie chart.
+
+        Parameters
+        ----------
+        gtzan_data : pd.DataFrame
+            GTZAN genre classification data with 'label' column
+        save_figs : bool, default=True
+            Whether to save figures to output_directory
+        show : bool, default=False
+            Whether to display figures interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
 
         print("GTZAN DATASET ANALYSIS")
@@ -94,67 +133,107 @@ class EDAanalyser:
             plt.show()
         else:
             plt.close()
+        return fig
 
 
-    def analyze_spotify(self, spotify_data: pd.DataFrame, save_figs: bool=True, show: bool=False) -> None:
+    def analyze_spotify(
+        self,
+        spotify_data: pd.DataFrame,
+        save_figs: bool = True,
+        show: bool = False
+        ) -> Optional[plt.Figure]:
         """
         Perform EDA on Spotify dataset.
-        
-        Argumnents:
-            spotify_data (pd.DataFrame): Spotify data
-            save_figs (bool): Whether to save figures
-            show (bool): Whether to display figures
-        
-        Returns:
-            None
+
+        Generates audio feature distribution histograms for danceability,
+        energy, speechiness, acousticness, instrumentalness, liveness,
+        and valence.
+
+        Parameters
+        ----------
+        spotify_data : pd.DataFrame
+            Spotify audio features data
+        save_figs : bool, default=True
+            Whether to save figures to output_directory
+        show : bool, default=False
+            Whether to display figures interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure or None
+            The generated figure object, or None if no audio features
+            are available in the data
         """
         print("SPOTIFY DATASET ANALYSIS")
         print("=" * 70)
-        
+
         # Basic stats
         self.infos_about_dataset(spotify_data, "Spotify Top Songs")
-        
+
         # Audio features distribution
         audio_features = ['danceability', 'energy', 'speechiness', 'acousticness',
-                         'instrumentalness', 'liveness', 'valence']
+                        'instrumentalness', 'liveness', 'valence']
         audio_features = [f for f in audio_features if f in spotify_data.columns]
-        
+
+        # Initialize fig to None in case no features are available
+        fig = None
+
         if len(audio_features) > 0:
             fig, axes = plt.subplots(2, 4, figsize=(16, 8))
             axes = axes.ravel()
-            
+
             for i, feature in enumerate(audio_features):
-                axes[i].hist(spotify_data[feature].dropna(), bins=50, color='red', alpha=0.7, edgecolor='black')
+                axes[i].hist(spotify_data[feature].dropna(), bins=50, 
+                            color='red', alpha=0.7, edgecolor='black')
                 axes[i].set_title(f'{feature.capitalize()}', fontweight='bold')
                 axes[i].set_xlabel('Value')
                 axes[i].set_ylabel('Frequency')
                 axes[i].grid(alpha=0.3)
-            
-            # Hide extra subplot
-            if len(audio_features) < 8:
-                axes[-1].axis('off')
-            
+
+            # Hide ALL extra subplots (not just the last one)
+            for j in range(len(audio_features), len(axes)):
+                axes[j].axis('off')
+
             plt.suptitle('Spotify Audio Features Distribution', fontsize=16, fontweight='bold')
             plt.tight_layout()
             if save_figs:
-                plt.savefig(self.output_directory / '02_spotify_audio_features.png', dpi=300, bbox_inches='tight')
+                plt.savefig(self.output_directory / '02_spotify_audio_features.png', 
+                        dpi=300, bbox_inches='tight')
             if show:
                 plt.show()
             else:
                 plt.close()
+        else:
+            print("Warning: No audio features found in Spotify data")
+
+        return fig
 
 
-    def analyze_lyrics(self, lyrics_data: pd.DataFrame, save_figs: bool=True, show: bool=False) -> None:
+    def analyze_lyrics(
+        self,
+        lyrics_data: pd.DataFrame,
+        save_figs: bool = True,
+        show: bool = False
+        ) -> plt.Figure:
         """
         Perform EDA on Lyrics dataset.
 
-        Arguments:
-            lyrics_data (pd.DataFrame): Lyrics data
-            save_figs (bool): Whether to save figures
-            show (bool): Whether to display figures
+        Generates text length distribution plots and top artists bar chart.
 
-        Returns:
-            None    
+        Parameters
+        ----------
+        lyrics_data : pd.DataFrame
+            Lyrics data with 'text' and/or 'artist' columns
+        save_figs : bool, default=True
+            Whether to save figures to output_directory
+        show : bool, default=False
+            Whether to display figures interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure or None
+            The generated figure object, or None if no visualizations
+            could be created (missing required columns)
         """
         print("\n" + "=" * 70)
         print("LYRICS DATASET ANALYSIS")
@@ -162,6 +241,8 @@ class EDAanalyser:
         
         # Basic stats
         self.infos_about_dataset(lyrics_data, "Million Song Dataset (Lyrics)")
+
+        fig = None
         
         # Text length analysis
         if 'text' in lyrics_data.columns:
@@ -201,7 +282,7 @@ class EDAanalyser:
         if 'artist' in lyrics_data.columns:
             top_artists = lyrics_data['artist'].value_counts().head(15)
             
-            plt.figure(figsize=(12, 6))
+            fig_artist = plt.figure(figsize=(12, 6))
             top_artists.plot(kind='barh', color='darkgreen', edgecolor='black')
             plt.title('Top 15 Artists by Number of Songs', fontsize=14, fontweight='bold')
             plt.xlabel('Number of Songs')
@@ -210,18 +291,36 @@ class EDAanalyser:
             plt.tight_layout()
             if save_figs:
                 plt.savefig(self.output_directory / '03_lyrics_top_artists.png', dpi=300, bbox_inches='tight')
+            if show:
+                plt.show()
+            else:
+                plt.close()
+            
+            # Return artists figure if text figure wasn't created
+            if fig is None:
+                fig = fig_artist
+        return fig
 
-    def generate_full_report(self, gtzan_data: Optional[pd.DataFrame]=None, spotify_data: Optional[pd.DataFrame]=None, lyrics_data: Optional[pd.DataFrame]=None):
+    def generate_full_report(
+        self,
+        gtzan_data: Optional[pd.DataFrame]=None,
+        spotify_data: Optional[pd.DataFrame]=None,
+        lyrics_data: Optional[pd.DataFrame]=None
+        ) -> None:
         """
         Generate a complete EDA report for all datasets.
-        
-        Args:
-            gtzan_data (pd.DataFrame): GTZAN data
-            spotify_data (pd.DataFrame): Spotify data
-            lyrics_data (pd.DataFrame): Lyrics data
-        
-        Returns:
-            None
+
+        Runs analysis methods for each provided dataset and saves
+        all figures to the output directory.
+
+        Parameters
+        ----------
+        gtzan_data : pd.DataFrame, optional
+            GTZAN genre classification data
+        spotify_data : pd.DataFrame, optional
+            Spotify audio features data
+        lyrics_data : pd.DataFrame, optional
+            Lyrics data with text and artist columns
         """
         print("\n" + "=" * 70)
         print("GENERATING COMPLETE EDA REPORT")

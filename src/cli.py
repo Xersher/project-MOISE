@@ -1,5 +1,6 @@
 """
 MOISE (Mood and Noise) - Command Line Interface
+===============================================
 
 This CLI allows running the full analysis pipeline end-to-end without manual editing.
 
@@ -7,7 +8,8 @@ Implements PROPOSAL requirements:
 - Command line interface to run the full workflow without manual editing
 - Full pipeline from data loading to report generation
 
-Usage:
+Usage
+-----
     python cli.py --help
     python cli.py --all
     python cli.py --genre --clustering
@@ -48,17 +50,37 @@ DEFAULT_OUTPUT_DIR = str(REPO_ROOT / 'results')
 class MOISEPipeline:
     """
     Main pipeline class for MOISE project.
-    Orchestrates all analysis modules.
+
+    Orchestrates all analysis modules including genre classification,
+    mood clustering, popularity prediction, and lyrics analysis.
+
+    Attributes
+    ----------
+    data_dir : Path
+        Directory containing input datasets
+    output_dir : Path
+        Directory for results, figures, and models
+    loader : DataLoader
+        Data loading component
+    preprocessor : Preprocessor
+        Data preprocessing component
     """
     
     #def __init__(self, data_dir: str='/files/project-MOISE/data', output_dir: str='/files/project-MOISE/results') -> None:
-    def __init__(self, data_dir: str = None, output_dir: str = None) -> None:
+    def __init__(
+        self, 
+        data_dir: Optional[str] = None,
+        output_dir: Optional[str] = None
+        ) -> None:
         """
         Initialize the MOISE pipeline.
-        
-        Args:
-            data_dir (str): Directory containing datasets
-            output_dir (str): Directory for results and reports
+
+        Parameters
+        ----------
+        data_dir : str, optional
+            Directory containing datasets. If None, uses DEFAULT_DATA_DIR.
+        output_dir : str, optional
+            Directory for results and reports. If None, uses DEFAULT_OUTPUT_DIR.
         """
         # Default to repository-local data/results if not provided
         if data_dir is None:
@@ -66,16 +88,16 @@ class MOISEPipeline:
         if output_dir is None:
             output_dir = DEFAULT_OUTPUT_DIR
 
-        self.data_dir = Path(data_dir)
-        self.output_dir = Path(output_dir)
+        self.data_dir: Path = Path(data_dir)
+        self.output_dir: Path = Path(output_dir)
         
         # Create output directories
         (self.output_dir / 'figures').mkdir(parents=True, exist_ok=True)
         (self.output_dir / 'models').mkdir(parents=True, exist_ok=True)
         
         # Initialize components
-        self.loader = DataLoader(str(self.data_dir))
-        self.preprocessor = Preprocessor()
+        self.loader: DataLoader = DataLoader(str(self.data_dir))
+        self.preprocessor: Preprocessor = Preprocessor()
         
         print("MOISE Pipeline initialized")
         print(f"Data directory: {self.data_dir}")
@@ -84,13 +106,18 @@ class MOISEPipeline:
     def run_genre_classification(self) -> Optional[Dict[str, Any]]:
         """
         Run genre classification pipeline.
-        
-        Returns:
-            A dictionary with:
-                - 'results': full metrics per model (dict)
-                - 'best_model': name of the best model (str)
-                - 'confusion_matrix_path': path to saved confusion matrix figure (str)
-            or None if the pipeline step failed.
+
+        Loads GTZAN dataset, preprocesses features, trains multiple
+        classifiers, and generates comparison visualizations.
+
+        Returns
+        -------
+        dict or None
+            If successful, returns a dictionary containing:
+            - 'results': dict, full metrics per model
+            - 'best_model': str, name of the best model
+            - 'confusion_matrix_path': str, path to saved confusion matrix figure
+            Returns None if the pipeline step failed.
         """
         print("\n" + "="*70)
         print("GENRE CLASSIFICATION")
@@ -153,29 +180,31 @@ class MOISEPipeline:
     
     def run_clustering(self) -> Optional[Dict[str, Any]]:
         """
-        Run mood clustering pipeline using the Circumplex Model of Affect (Russell, 1980).
-        
-        The Circumplex Model structures emotions along two dimensions:
+        Run mood clustering pipeline using the Circumplex Model of Affect.
+
+        Based on Russell (1980), structures emotions along two dimensions:
         - Valence: Pleasure-Displeasure (positive to negative)
         - Arousal: Activation-Deactivation (high to low energy)
-        
+
         These dimensions form 4 quadrants (K=4 clusters):
-            - Q1: High Energy Positive (Happy, Excited)
-            - Q2: High Energy Negative (Angry, Tense)
-            - Q3: Low Energy Negative (Sad, Melancholic)
-            - Q4: Low Energy Positive (Calm, Peaceful)
-        
-        Returns:
-            A dictionary with:
-                - 'descriptions': per-cluster feature summaries (dict)
-                - 'names': mapping from cluster id to human-readable name (dict[int, str])
-                - 'summary': text summary of clusters (str)
-                - 'n_clusters': number of clusters (int, typically 4)
-                - 'model': description of the model used (str)
-                - 'circumplex_path': path to the Circumplex diagram figure (str)
-                - 'cluster_plot_path': path to 2D cluster plot (str)
-                - 'profiles_path': path to cluster profiles plot (str)
-            or None if the pipeline step failed.
+        - Q1: High Energy Positive (Happy, Excited)
+        - Q2: High Energy Negative (Angry, Tense)
+        - Q3: Low Energy Negative (Sad, Melancholic)
+        - Q4: Low Energy Positive (Calm, Peaceful)
+
+        Returns
+        -------
+        dict or None
+            If successful, returns a dictionary containing:
+            - 'descriptions': pd.DataFrame, per-cluster feature summaries
+            - 'names': dict of int to str, cluster ID to name mapping
+            - 'summary': str, text summary of clusters
+            - 'n_clusters': int, number of clusters (4)
+            - 'model': str, description of the model used
+            - 'circumplex_path': str, path to Circumplex diagram figure
+            - 'cluster_plot_path': str, path to 2D cluster plot
+            - 'profiles_path': str, path to cluster profiles plot
+            Returns None if the pipeline step failed.
         """
         print("\n" + "="*70)
         print("MOOD CLUSTERING - Circumplex Model (Russell, 1980)")
@@ -294,17 +323,19 @@ class MOISEPipeline:
     def run_popularity_prediction(self) -> Optional[Dict[str, Any]]:
         """
         Run popularity prediction pipeline.
-        
-        Returns:
-            A dictionary with:
-                - 'results':
-                    - 'best_model': name of the best regression model (str)
-                    - 'metrics': metric dict for the best model
-                      (contains keys like 'train_r2', 'test_r2', 'mae', 'rmse', 'mape', 'cv_mean', 'cv_std')
-                - 'comparison_path': path to model comparison figure (str)
-                - 'predictions_path': path to actual vs predicted / residuals plot (str)
-                - 'feature_importance_path': path to feature importance figure (str)
-            or None if the pipeline step failed.
+
+        Loads Spotify dataset, preprocesses features, trains multiple
+        regression models, and generates visualizations.
+
+        Returns
+        -------
+        dict or None
+            If successful, returns a dictionary containing:
+            - 'results': dict with 'best_model' (str) and 'metrics' (dict)
+            - 'comparison_path': str, path to model comparison figure
+            - 'predictions_path': str, path to predictions plot
+            - 'feature_importance_path': str, path to feature importance figure
+            Returns None if the pipeline step failed.
         """
         print("\n" + "="*70)
         print("POPULARITY PREDICTION")
@@ -379,14 +410,18 @@ class MOISEPipeline:
         """
         Run lyrics analysis pipeline.
 
-        Returns:
-            A dictionary with paths to generated figures:
-                - 'sentiment_path'
-                - 'word_freq_path'
-                - 'themes_path'
-                - 'personal_level_path'
-            (and any additional plots you actually generate),
-            or None if the pipeline step failed.
+        Loads lyrics dataset, preprocesses text, performs sentiment
+        analysis, word frequency analysis, and theme detection.
+
+        Returns
+        -------
+        dict or None
+            If successful, returns a dictionary with paths to generated figures:
+            - 'sentiment_path': str, path to sentiment distribution plot
+            - 'word_freq_path': str, path to word frequencies plot
+            - 'themes_path': str, path to themes plot
+            - 'personal_level_path': str, path to personal level distribution plot
+            Returns None if the pipeline step failed.
         """
         print("\n" + "="*70)
         print("LYRICS ANALYSIS")
@@ -433,12 +468,14 @@ class MOISEPipeline:
     
     def run_all(self) -> None:
         """
-        Run the complete MOISE pipeline:
-        - Genre classification
-        - Mood clustering (Circumplex Model)
-        - Popularity prediction
-        - Lyrics analysis
-        
+        Run the complete MOISE pipeline.
+
+        Executes all analysis modules in sequence:
+        1. Genre classification
+        2. Mood clustering (Circumplex Model)
+        3. Popularity prediction
+        4. Lyrics analysis
+
         Prints a summary of generated outputs and saves all figures/models
         under the configured output directory.
         """
@@ -484,8 +521,27 @@ class MOISEPipeline:
         
 
 
-def main():
-    """Main CLI function."""
+def main() -> None:
+    """
+    Main CLI entry point.
+
+    Parses command-line arguments and runs the requested pipeline
+    components. Supports running individual modules or the complete
+    pipeline.
+
+    Examples
+    --------
+    Run complete pipeline:
+        $ python cli.py --all
+
+    Run specific analyses:
+        $ python cli.py --genre
+        $ python cli.py --clustering
+        $ python cli.py --genre --popularity
+
+    Custom directories:
+        $ python cli.py --all --data-dir ./data --output-dir ./results
+    """
     parser = argparse.ArgumentParser(
         description='MOISE (Mood and Noise) - Music Analysis Pipeline',
         formatter_class=argparse.RawDescriptionHelpFormatter,

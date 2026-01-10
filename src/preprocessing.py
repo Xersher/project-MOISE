@@ -1,5 +1,12 @@
 """
-This module handles the data cleaning, transformation and feature engineering for all datasets.
+Preprocessing Module
+====================
+
+This module handles the data cleaning, transformation and feature engineering 
+for all datasets:
+- GTZAN: scaling, encoding, train/test split
+- Spotify: feature selection, log transform, scaling
+- Lyrics: text cleaning, deduplication, filtering
 """
 import re
 from pathlib import Path
@@ -13,27 +20,81 @@ from sklearn.model_selection import train_test_split
 
 
 class Preprocessor:
-    """Class for preprocessing datasets for modeling"""
+    """
+    Class for preprocessing datasets for modeling.
+
+    This class provides methods to clean, transform, and prepare the GTZAN,
+    Spotify, and lyrics datasets for machine learning tasks.
+
+    Attributes
+    ----------
+    scaler : StandardScaler
+        Scikit-learn StandardScaler for feature normalization
+    label_encoder : LabelEncoder
+        Scikit-learn LabelEncoder for encoding categorical labels
+    feature_names : list of str or None
+        List of feature column names after preprocessing
+    """
 
     def __init__(self) -> None:
-        self.scaler = StandardScaler()
-        self.label_encoder = LabelEncoder()
-        self.feature_names = None
+        """
+        Initialize the Preprocessor.
 
-    def preprocess_gtzan(self, gtzan_data: pd.DataFrame, test_size: float=0.2, 
-                        random_state: int=42) -> Tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, List[str], LabelEncoder]:
+        Creates instances of StandardScaler and LabelEncoder for use
+        in preprocessing methods.
+        """
+        self.scaler: StandardScaler = StandardScaler()
+        self.label_encoder: LabelEncoder = LabelEncoder()
+        self.feature_names: Optional[List[str]] = None
+
+    def preprocess_gtzan(
+        self,
+        gtzan_data: pd.DataFrame,
+        test_size: float=0.2, 
+        random_state: int=42
+        ) -> Tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, List[str], LabelEncoder]:
         """
         Preprocess GTZAN dataset for genre classification.
 
-        Arguments:
-            gtzan_data (pd.DataFrame): Raw GTZAN data
-            test_size (float): Proportion of test set
-            random_state (int): Random seed
+        Performs the following steps:
+        1. Excludes non-feature columns ('filename', 'length', 'label')
+        2. Imputes missing values with column medians
+        3. Encodes genre labels as integers
+        4. Splits data into train/test sets with stratification
+        5. Scales features using StandardScaler
 
-        Returns:
-            Tuple[pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, List[str], LabelEncoder]:
-                X_train, X_test, y_train, y_test, feature_names, label_encoder
+        Parameters
+        ----------
+        gtzan_data : pd.DataFrame
+            Raw GTZAN data containing audio features and genre labels
+        test_size : float, default=0.2
+            Proportion of the dataset to include in the test split
+        random_state : int, default=42
+            Random seed for reproducibility
+
+        Returns
+        -------
+        X_train : pd.DataFrame
+            Scaled training features
+        X_test : pd.DataFrame
+            Scaled test features
+        y_train : np.ndarray
+            Encoded training labels
+        y_test : np.ndarray
+            Encoded test labels
+        feature_names : list of str
+            List of feature column names
+        label_encoder : LabelEncoder
+            Fitted LabelEncoder for inverse transformation
+
+        Raises
+        ------
+        TypeError
+            If gtzan_data is not a pandas DataFrame
+        ValueError
+            If required column 'label' is missing or no feature columns found
         """
+        print("Preprocessing GTZAN dataset...")
         # Validation
         if not isinstance(gtzan_data, pd.DataFrame):
             raise TypeError("gtzan_data must be a pandas DataFrame")
@@ -84,20 +145,53 @@ class Preprocessor:
 
         return X_train, X_test, y_train, y_test, feature_columns, self.label_encoder
 
-    def preprocess_spotify(self, spotify_data: pd.DataFrame, target_col: str='streams', test_size: float=0.2, 
-                            random_state: int=42) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, List[str]]:
+    def preprocess_spotify(
+        self,
+        spotify_data: pd.DataFrame,
+        target_col: str='streams',
+        test_size: float=0.2, 
+        random_state: int=42
+        ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, List[str]]:
         """
         Preprocess Spotify dataset for popularity prediction.
 
-        Arguments:
-            spotify_data (pd.DataFrame): Raw Spotify data
-            target_col (str): Target variable name
-            test_size (float): Proportion of test set
-            random_state (int): Random seed
+        Performs the following steps:
+        1. Removes rows with missing target values
+        2. Selects audio features (danceability, energy, etc.)
+        3. Encodes categorical columns ('key', 'mode') if present
+        4. Handles inf/NaN values and imputes with medians
+        5. Applies log transformation to 'streams' target
+        6. Splits data into train/test sets
+        7. Scales features using StandardScaler
 
-        Returns:
-            Tuple[pd.DataFrame, pd.DataFrame, pd.Series, pd.Series, List[str]]:
-                X_train, X_test, y_train, y_test, feature_names
+        Parameters
+        ----------
+        spotify_data : pd.DataFrame
+            Raw Spotify data containing audio features and streaming metrics
+        target_col : str, default='streams'
+            Name of the target variable column
+        test_size : float, default=0.2
+            Proportion of the dataset to include in the test split
+        random_state : int, default=42
+            Random seed for reproducibility
+
+        Returns
+        -------
+        X_train : pd.DataFrame
+            Scaled training features
+        X_test : pd.DataFrame
+            Scaled test features
+        y_train : pd.Series
+            Training target values (log-transformed if target is 'streams')
+        y_test : pd.Series
+            Test target values (log-transformed if target is 'streams')
+        feature_names : list of str
+            List of feature column names used
+
+        Raises
+        ------
+        ValueError
+            If target column is not found or no usable feature columns exist
         """
         print("Preprocessing Spotify dataset...")
 
@@ -172,16 +266,39 @@ class Preprocessor:
         return X_train, X_test, y_train, y_test, available_features
 
         
-    def preprocess_lyrics(self, lyrics_data: pd.DataFrame, sample_size: Optional[int]=None) -> pd.DataFrame:
+    def preprocess_lyrics(
+        self,
+        lyrics_data: pd.DataFrame,
+        sample_size: Optional[int]=None
+        ) -> pd.DataFrame:
         """
         Preprocess lyrics dataset for NLP analysis.
 
-        Arguments:
-            lyrics_data (pd.DataFrame): Raw lyrics data
-            sample_size (int): Optional sample size for faster processing
+        Performs the following steps:
+        1. Optionally samples data for faster processing
+        2. Removes rows with missing 'text' values
+        3. Filters out very short lyrics (< 51 characters)
+        4. Cleans text (lowercase, remove numbers/URLs/special chars)
+        5. Removes duplicate lyrics
 
-        Returns:
-            pd.DataFrame: Cleaned lyrics data
+        Parameters
+        ----------
+        lyrics_data : pd.DataFrame
+            Raw lyrics data with 'text' column
+        sample_size : int, optional
+            If provided, randomly sample this many rows for faster processing
+
+        Returns
+        -------
+        pd.DataFrame
+            Cleaned lyrics data with additional columns:
+            - 'text_length': character count of original text
+            - 'cleaned_text': preprocessed text for analysis
+
+        Raises
+        ------
+        ValueError
+            If 'text' column is not found in lyrics data
         """
         print("Preprocessing lyrics dataset...")
 
@@ -246,18 +363,37 @@ class Preprocessor:
     
 
     
-    def create_cross_dataset_features(self, gtzan_data: pd.DataFrame, spotify_data: pd.DataFrame) -> pd.DataFrame:
+    def create_cross_dataset_features(
+        self,
+        gtzan_data: pd.DataFrame,
+        spotify_data: pd.DataFrame
+        ) -> pd.DataFrame:
         """
         Create features that combine information from multiple datasets.
-        (This is for advanced analysis)
-        
-        Arguments:
-            gtzan_data (pd.DataFrame): GTZAN data
-            spotify_data (pd.DataFrame): Spotify data
-            
-        Returns:
-            pd.DataFrame: Combined features
+
+        This method is a placeholder for advanced feature engineering
+        that combines insights from GTZAN and Spotify datasets.
+
+        Parameters
+        ----------
+        gtzan_data : pd.DataFrame
+            GTZAN data with audio features
+        spotify_data : pd.DataFrame
+            Spotify data with audio features
+
+        Returns
+        -------
+        pd.DataFrame
+            Single-row DataFrame containing combined features:
+            - 'gtzan_mean_tempo': mean tempo from GTZAN dataset
+            - 'spotify_mean_tempo': mean tempo from Spotify dataset
+
+        Notes
+        -----
+        This is currently a minimal implementation. Future versions may
+        include more sophisticated cross-dataset feature engineering.
         """
+        print("Creating cross-dataset features...")
         
         # This is a placeholder for advanced feature engineering
         # that combines insights from multiple datasets

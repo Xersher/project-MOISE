@@ -1,15 +1,17 @@
 """
 Lyrics Analysis Module (NLP)
+============================
 
 This module performs Natural Language Processing on song lyrics including:
-- Sentiment analysis
+- Sentiment analysis (polarity and subjectivity)
 - Word frequency analysis
-- Topic modeling
-- Text statistics
+- Theme identification via keyword matching
+- Text statistics (lexical diversity, personal pronoun usage)
 """
+
 from collections import Counter
 from pathlib import Path
-from typing import Dict, Optional, Counter as CounterType
+from typing import Dict, Optional, Set, Counter as CounterType
 
 import numpy as np
 import pandas as pd
@@ -45,39 +47,71 @@ except ImportError:
 
 
 class LyricsAnalyzer:
-    """Class to perfom analysis on song lyrics."""
+    """
+    Class to perform NLP analysis on song lyrics.
 
-    def __init__(self, output_directory: str='/files/project-MOISE/results/figures') -> None:
-        """Initializes the LyricAnalyzer
+    This class provides methods for sentiment analysis, word frequency
+    extraction, theme identification, and text statistics calculation.
 
-        Arguments:
-            output_directory: Directory to save the analysis results.
-        
-        Returns: None
+    Attributes
+    ----------
+    output_directory : Path
+        Directory to save analysis results and figures
+    stop_words : set of str
+        English stop words for filtering in word frequency analysis
+    """
+
+    def __init__(self, output_directory: str = '/files/project-MOISE/results/figures') -> None:
         """
-        self.output_directory = Path(output_directory)
+        Initialize the LyricsAnalyzer.
+
+        Parameters
+        ----------
+        output_directory : str, default='/files/project-MOISE/results/figures'
+            Directory to save the analysis results
+        """
+        self.output_directory: Path = Path(output_directory)
         self.output_directory.mkdir(parents=True, exist_ok=True)
+        self.stop_words: Set[str] = set()
 
         # Load the stop words
         try:
             if stopwords is not None:
                 self.stop_words = set(stopwords.words('english'))
             else:
-                self.stop_words = set()
                 print("Stop words not available (NLTK not installed)")
         except Exception as e:
-            self.stop_words = set()
             print(f"Stop words not available: {e}")
 
     def calculate_text_statistics(self, lyrics_data: pd.DataFrame) -> pd.DataFrame:
         """
-        Calculate basic text statistics.
-        
-        Arguments:
-            lyrics_data (pd.DataFrame): Lyrics data with 'cleaned_text' column
-            
-        Returns:
-            pd.DataFrame: Statistics
+        Calculate basic text statistics for each lyric.
+
+        Computes word counts, lexical diversity, and personal pronoun
+        usage metrics for intimacy analysis.
+
+        Parameters
+        ----------
+        lyrics_data : pd.DataFrame
+            Lyrics data with 'cleaned_text' column
+
+        Returns
+        -------
+        pd.DataFrame
+            Statistics DataFrame with columns:
+            - 'char_count': number of characters
+            - 'word_count': number of words
+            - 'unique_words': number of unique words
+            - 'avg_word_length': average word length
+            - 'lexical_diversity': unique words / total words
+            - 'personal_pronoun_count': count of personal pronouns
+            - 'personal_pronoun_ratio': pronouns / total words
+            - 'personal_level': categorical ('High', 'Medium', 'Low')
+
+        Raises
+        ------
+        ValueError
+            If 'cleaned_text' column is missing from lyrics_data
         """
         if 'cleaned_text' not in lyrics_data.columns:
             raise ValueError("The 'cleaned_text' column is required in the lyrics data.")
@@ -125,13 +159,32 @@ class LyricsAnalyzer:
     
     def sentiment_analysis(self, lyrics_data: pd.DataFrame) -> pd.DataFrame:
         """
-        Perform sentiment analysis on lyrics.
-        
-        Arguments:
-            lyrics_data (pd.DataFrame): Lyrics data with 'cleaned_text' column
-            
-        Returns:
-            pd.DataFrame: Data with sentiment scores
+        Perform sentiment analysis on lyrics using TextBlob.
+
+        Calculates polarity (-1 to +1) and subjectivity (0 to 1) scores
+        for each lyric, and assigns categorical sentiment labels.
+
+        Parameters
+        ----------
+        lyrics_data : pd.DataFrame
+            Lyrics data with 'cleaned_text' column
+
+        Returns
+        -------
+        pd.DataFrame
+            Copy of input data with additional columns:
+            - 'polarity': float from -1 (negative) to +1 (positive)
+            - 'subjectivity': float from 0 (objective) to 1 (subjective)
+            - 'sentiment': categorical ('Positive', 'Neutral', 'Negative')
+
+        Raises
+        ------
+        ValueError
+            If 'cleaned_text' column is not found in lyrics_data
+
+        Notes
+        -----
+        If TextBlob is not installed, returns neutral sentiment (0.0) for all lyrics.
         """
         if 'cleaned_text' not in lyrics_data.columns:
             raise ValueError("'cleaned_text' column not found in lyrics_data")
@@ -179,15 +232,28 @@ class LyricsAnalyzer:
 
         return result_df
 
-    def plot_sentiment_distribution(self, sentiment_data, save_path = None, show=False) -> plt.Figure:
+    def plot_sentiment_distribution(
+        self,
+        sentiment_data: pd.DataFrame,
+        save_path: Optional[Path] = None,
+        show: bool = False
+        ) -> plt.Figure:
         """
         Plot sentiment distribution.
-        
-        Arguments:
-            sentiment_data (pd.DataFrame): Data with sentiment columns
-            save_path (str): Path to save the figure
-        
-        Returns: plt.Figure
+
+        Parameters
+        ----------
+        sentiment_data : pd.DataFrame
+            Data with sentiment columns ('sentiment', 'polarity', 'subjectivity')
+        save_path : Path, optional
+            Path to save the figure. If None, saves to output_directory
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         if save_path is None:
             save_path = self.output_directory / "06_sentiment_distribution.png"
@@ -196,16 +262,16 @@ class LyricsAnalyzer:
             save_path.parent.mkdir(parents=True, exist_ok=True)
 
         fig, axes = plt.subplots(1, 3, figsize=(16, 5))
-        
+
         # Sentiment categories
         sentiment_counts = sentiment_data['sentiment'].value_counts()
-        axes[0].bar(sentiment_counts.index, sentiment_counts.values, 
-                   color=['green', 'gray', 'red'])
+        axes[0].bar(sentiment_counts.index, sentiment_counts.values,
+                color=['green', 'gray', 'red'])
         axes[0].set_title('Sentiment Distribution', fontweight='bold')
         axes[0].set_xlabel('Sentiment')
         axes[0].set_ylabel('Count')
         axes[0].grid(alpha=0.3, axis='y')
-        
+
         # Polarity distribution
         axes[1].hist(sentiment_data['polarity'], bins=50, color='blue', alpha=0.7)
         axes[1].axvline(x=0, color='red', linestyle='--', linewidth=2)
@@ -213,31 +279,45 @@ class LyricsAnalyzer:
         axes[1].set_xlabel('Polarity (-1 = Negative, +1 = Positive)')
         axes[1].set_ylabel('Frequency')
         axes[1].grid(alpha=0.3)
-        
+
         # Subjectivity distribution
         axes[2].hist(sentiment_data['subjectivity'], bins=50, color='purple', alpha=0.7)
         axes[2].set_title('Subjectivity Distribution', fontweight='bold')
         axes[2].set_xlabel('Subjectivity (0 = Objective, 1 = Subjective)')
         axes[2].set_ylabel('Frequency')
         axes[2].grid(alpha=0.3)
-        
+
         plt.tight_layout()
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
         if show:
             plt.show()
-        plt.close()
+        else:
+            plt.close()
         print(f"Sentiment distribution plot saved to {save_path}")
 
-    def extract_word_frequencies(self, lyrics_data: pd.DataFrame, top_n: int=50) -> Counter:
+        return fig
+
+    def extract_word_frequencies(
+        self,
+        lyrics_data: pd.DataFrame,
+        top_n: int = 50
+        ) -> Counter:
         """
         Extract most common words from lyrics.
-        
-        Arguments:
-            lyrics_data (pd.DataFrame): Lyrics data
-            top_n (int): Number of top words to return
-            
-        Returns:
-            Counter: Word frequencies
+
+        Filters out stop words and words with fewer than 3 characters.
+
+        Parameters
+        ----------
+        lyrics_data : pd.DataFrame
+            Lyrics data with 'cleaned_text' column
+        top_n : int, default=50
+            Number of top words to return
+
+        Returns
+        -------
+        Counter
+            Word frequencies as a Counter object
         """
         
         all_words = []
@@ -258,25 +338,42 @@ class LyricsAnalyzer:
         
         return word_freq
     
-    def plot_word_frequencies(self, word_freq: Counter, top_n: int=20, save_path: Optional[Path]=None, show: bool=False) -> None:
+    def plot_word_frequencies(
+        self,
+        word_freq: Counter,
+        top_n: int = 20,
+        save_path: Optional[Path]=None,
+        show: bool = False
+        ) -> plt.Figure:
         """
-        Plot most common words.
-        
-        Arguments:
-            word_freq (Counter): Word frequencies
-            top_n (int): Number of top words to plot
-            save_path (str): Path to save the figure
-        
-        Returns: None
+        Plot most common words as a horizontal bar chart.
+
+        Parameters
+        ----------
+        word_freq : Counter
+            Word frequencies from extract_word_frequencies()
+        top_n : int, default=20
+            Number of top words to plot
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{output_directory}/07_word_frequencies.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         if save_path is None:
             save_path = self.output_directory / "07_word_frequencies.png"
         else:
             save_path = Path(save_path)
             save_path.parent.mkdir(parents=True, exist_ok=True)
+        
         top_words = dict(word_freq.most_common(top_n))
         
-        plt.figure(figsize=(12, 8))
+        fig = plt.figure(figsize=(12, 8))
         plt.barh(list(top_words.keys()), list(top_words.values()), color='teal')
         plt.xlabel('Frequency', fontsize=12)
         plt.title(f'Top {top_n} Most Common Words in Lyrics', fontweight='bold', fontsize=14)
@@ -287,17 +384,32 @@ class LyricsAnalyzer:
         if show:
             plt.show()
         plt.close()
+
         print(f"Word frequencies plot saved to {save_path}")
+
+        return fig
     
     def analyze_song_themes(self, lyrics_data: pd.DataFrame) -> Dict[str, int]:
         """
         Identify common themes in lyrics using keyword analysis.
-        
-        Arguments:
-            lyrics_data (pd.DataFrame): Lyrics data
-            
-        Returns:
-            dict: Theme frequencies
+
+        Searches for predefined keywords associated with 8 themes:
+        Love, Party, Sadness, Happiness, Freedom, Money, Life, Dreams.
+
+        Parameters
+        ----------
+        lyrics_data : pd.DataFrame
+            Lyrics data with 'cleaned_text' column
+
+        Returns
+        -------
+        dict of str to int
+            Theme frequencies mapping theme names to song counts
+
+        Raises
+        ------
+        ValueError
+            If 'cleaned_text' column is not found in lyrics_data
         """
         if 'cleaned_text' not in lyrics_data.columns:
             raise ValueError("'cleaned_text' column not found in lyrics_data")
@@ -336,24 +448,39 @@ class LyricsAnalyzer:
         
         return theme_counts
     
-    def plot_themes(self, theme_counts: Dict[str, int], save_path: Optional[Path]=None, show: bool=False) -> None:
+    def plot_themes(
+        self,
+        theme_counts: Dict[str, int],
+        save_path: Optional[Path] = None,
+        show: bool = False
+        ) -> plt.Figure:
         """
-        Plot theme distribution.
-        
-        Arguments:
-            theme_counts (dict): Theme frequencies
-            save_path (str): Path to save the figure
+        Plot theme distribution as a bar chart.
 
-        Returns: None
+        Parameters
+        ----------
+        theme_counts : dict of str to int
+            Theme frequencies from analyze_song_themes()
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{output_directory}/08_song_themes.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         if save_path is None:
             save_path = self.output_directory / "08_song_themes.png"
         else:
             save_path = Path(save_path)
             save_path.parent.mkdir(parents=True, exist_ok=True)
+
         sorted_themes = dict(sorted(theme_counts.items(), key=lambda x: x[1], reverse=True))
         
-        plt.figure(figsize=(10, 6))
+        fig = plt.figure(figsize=(10, 6))
         plt.bar(sorted_themes.keys(), sorted_themes.values(), color='coral', alpha=0.7)
         plt.xlabel('Theme', fontsize=12)
         plt.ylabel('Number of Songs', fontsize=12)
@@ -368,16 +495,40 @@ class LyricsAnalyzer:
             plt.close()
         print(f"Themes plot saved to {save_path}")
 
-    def plot_personal_level_distribution(self, text_stats: pd.DataFrame, save_path: Optional[Path]=None, show: bool=False) -> None:
+        return fig
+
+    def plot_personal_level_distribution(
+        self,
+        text_stats: pd.DataFrame,
+        save_path: Optional[Path] = None,
+        show: bool = False
+        ) -> plt.Figure:
         """
         Plot the distribution of personal pronoun usage levels.
-        Shows how personal/intimate the lyrics are.
-        
-        Arguments:
-            text_stats (pd.DataFrame): Text statistics with personal_level column
-            save_path (str): Path to save the figure
-        
-        Returns: None
+
+        Creates a two-panel figure showing:
+        1. Pie chart of personal level categories
+        2. Histogram of personal pronoun ratios
+
+        Parameters
+        ----------
+        text_stats : pd.DataFrame
+            Text statistics with 'personal_level' and 'personal_pronoun_ratio' columns
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{output_directory}/09_personal_level_distribution.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
+
+        Raises
+        ------
+        ValueError
+            If 'personal_level' column is not found in text_stats
         """
         if save_path is None:
             save_path = self.output_directory / "09_personal_level_distribution.png"
@@ -419,14 +570,28 @@ class LyricsAnalyzer:
             plt.close()
         print(f"Personal level distribution plot saved to {save_path}")
 
+        return fig
+
     def generate_full_report(self, lyrics_data: pd.DataFrame) -> pd.DataFrame:
         """
         Generate a complete NLP analysis report.
-        
-        Arguments:
-            lyrics_data (pd.DataFrame): Cleaned lyrics data
-        
-        Returns: pd.DataFrame
+
+        Runs all analysis methods and generates all plots:
+        1. Text statistics calculation
+        2. Personal level distribution plot
+        3. Sentiment analysis and plot
+        4. Word frequency analysis and plot
+        5. Theme analysis and plot
+
+        Parameters
+        ----------
+        lyrics_data : pd.DataFrame
+            Cleaned lyrics data with 'cleaned_text' column
+
+        Returns
+        -------
+        pd.DataFrame
+            Lyrics data with sentiment scores added
         """
         print("\n" + "=" * 70)
         print("GENERATING COMPLETE LYRICS ANALYSIS REPORT")

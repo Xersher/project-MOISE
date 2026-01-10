@@ -1,5 +1,6 @@
 """
 MOISE (Mood and Noise) - Main Entry Point
+=========================================
 
 This module runs the complete MOISE analysis pipeline, including:
 1. Exploratory Data Analysis (EDA)
@@ -8,11 +9,13 @@ This module runs the complete MOISE analysis pipeline, including:
 4. Lyrics Analysis (NLP)
 5. Mood Clustering (Circumplex Model, K=4)
 
-Usage:
+Usage
+-----
     python main.py
     python main.py --data-dir ./my_data --output-dir ./my_results
 
-Output:
+Output
+------
     All results are saved to the output directory:
     - <output_dir>/figures/  : All visualizations (PNG)
     - <output_dir>/models/   : Trained models (PKL)
@@ -21,6 +24,7 @@ Output:
 import argparse
 import sys
 from pathlib import Path
+from typing import Union
 
 # Add project root and src to path so local modules can be imported when running from other CWDs
 project_root = Path(__file__).parent.resolve()
@@ -41,6 +45,7 @@ try:
     from .mood_clustering import MoodClusterer
     from .popularity_predictor import PopularityPredictor
     from .lyrics_analyzer import LyricsAnalyzer
+    from .eda import EDAanalyser
 except Exception:
     # Fallback for running as a standalone script
     from data_loader import DataLoader
@@ -49,17 +54,27 @@ except Exception:
     from mood_clustering import MoodClusterer
     from popularity_predictor import PopularityPredictor
     from lyrics_analyzer import LyricsAnalyzer
+    from eda import EDAanalyser
 
 
 
-def run_pipeline(data_dir, output_dir):
+def run_pipeline(data_dir: str, output_dir: str) -> None:
     """
     Run the complete MOISE pipeline.
-    
-    Args:
-        data_dir (Path): Directory containing datasets
-        output_dir (Path): Directory for results
-        sample_size (int): Sample size for lyrics analysis
+
+    Executes all analysis steps in sequence:
+    1. Exploratory Data Analysis (EDA)
+    2. Genre Classification
+    3. Popularity Prediction
+    4. Lyrics Analysis
+    5. Mood Clustering (Circumplex Model)
+
+    Parameters
+    ----------
+    data_dir : str
+        Directory containing datasets (GTZAN, Spotify, Lyrics CSVs)
+    output_dir : str
+        Directory for results (figures and models)
     """
     print("\n" + "="*70)
     print("  MOISE - Mood and Noise")
@@ -434,8 +449,21 @@ def run_pipeline(data_dir, output_dir):
     print("="*70)
 
 
-def main():
-    """Main CLI function with argument parsing."""
+def main() -> None:
+    """
+    Main CLI entry point with argument parsing.
+
+    Parses command-line arguments for data and output directories,
+    then runs the complete MOISE pipeline.
+
+    Examples
+    --------
+    Run with default settings:
+        $ python main.py
+
+    Specify custom directories:
+        $ python main.py --data-dir ./my_data --output-dir ./my_results
+    """
     parser = argparse.ArgumentParser(
         description='MOISE (Mood and Noise) - Music Analysis Pipeline',
         formatter_class=argparse.RawDescriptionHelpFormatter,

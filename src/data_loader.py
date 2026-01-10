@@ -1,5 +1,6 @@
 """
 Data Loader Module
+==================
 
 This module handles loading and initial validation of all datasets:
 - GTZAN features dataset
@@ -8,50 +9,70 @@ This module handles loading and initial validation of all datasets:
 """
 
 from pathlib import Path
+from typing import Tuple, Dict, Any, Optional, List
+
 import pandas as pd
-
-
 
 class DataLoader:
     """
     Class to load and validate all datasets.
-    
-    Attributes:
-        data_directory (Path): Path to the data directory
-        gtzan_data (pd.DataFrame): GTZAN genre classification data
-        spotify_data (pd.DataFrame): Spotify top songs data
-        lyrics_data (pd.DataFrame): Million Song Dataset lyrics
+
+    Attributes
+    ----------
+    data_directory : Path
+        Path to the data directory
+    gtzan_data : pd.DataFrame or None
+        GTZAN genre classification data
+    spotify_data : pd.DataFrame or None
+        Spotify top songs data
+    lyrics_data : pd.DataFrame or None
+        Million Song Dataset lyrics
     """
     
     def __init__(self, data_directory: str ='/files/project-MOISE/data') -> None:
         """
         Initialize the DataLoader.
-        
-        Arguments:
-            data_directory (str): Path to the directory containing the CSV files
+
+        Parameters
+        ----------
+        data_directory : str, default='/files/project-MOISE/data'
+            Path to the directory containing the CSV files
+
+        Raises
+        ------
+        FileNotFoundError
+            If the data directory does not exist
         """
-        self.data_directory = Path(data_directory)
-        self.gtzan_data = None
-        self.spotify_data = None
-        self.lyrics_data = None
-        
+        self.data_directory: Path = Path(data_directory)
+        self.gtzan_data: Optional[pd.DataFrame] = None
+        self.spotify_data: Optional[pd.DataFrame] = None
+        self.lyrics_data: Optional[pd.DataFrame] = None
+
         if not self.data_directory.exists():
             raise FileNotFoundError(f"Data directory does not exist: {self.data_directory}")
 
     def load_gtzan_data(self, filename: str = 'features_3_sec.csv') -> pd.DataFrame:
         """
         Load GTZAN genre classification dataset.
-        
-        Arguments:
-            filename (str): Name of the GTZAN CSV file
-            
-        Returns:
-            pd.DataFrame: Loaded GTZAN data
 
-        Raises:
-            FileNotFoundError: If the file does not exist
-            ValueError: If expected columns are missing
-            RuntimeError: If any other error occurs during loading
+        Parameters
+        ----------
+        filename : str, default='features_3_sec.csv'
+            Name of the GTZAN CSV file
+
+        Returns
+        -------
+        pd.DataFrame
+            Loaded GTZAN data with audio features and genre labels
+
+        Raises
+        ------
+        FileNotFoundError
+            If the file does not exist
+        ValueError
+            If expected columns ('filename', 'label') are missing
+        RuntimeError
+            If any other error occurs during loading
         """
         filepath = self.data_directory / filename
         
@@ -75,16 +96,25 @@ class DataLoader:
         """
         Load Spotify top songs dataset.
 
-        Arguments:
-            filename (str): Name of the Spotify CSV file
+        Parameters
+        ----------
+        filename : str, default='spotify_top_songs_audio_features.csv'
+            Name of the Spotify CSV file
 
-        Returns:
-            pd.DataFrame: Loaded Spotify data
+        Returns
+        -------
+        pd.DataFrame
+            Loaded Spotify data with audio features and streaming metrics
 
-        Raises:
-            FileNotFoundError: If the file does not exist
-            ValueError: If expected columns are missing
-            RuntimeError: If any other error occurs during loading
+        Raises
+        ------
+        FileNotFoundError
+            If the file does not exist
+        ValueError
+            If expected columns ('streams', 'danceability', 'energy', 
+            'valence', 'tempo') are missing
+        RuntimeError
+            If any other error occurs during loading
         """
         filepath = self.data_directory / filename
 
@@ -95,7 +125,7 @@ class DataLoader:
             expected_columns = ['streams', 'danceability', 'energy', 'valence', 'tempo']
             missing = [col for col in expected_columns if col not in df.columns]
             if missing:
-                raise ValueError(f"Warning: expected column(s) not found: {', '.join(missing)}")
+                raise ValueError(f"Missing expected column(s): {', '.join(missing)}")
 
             self.spotify_data = df
             return df
@@ -106,20 +136,28 @@ class DataLoader:
             raise RuntimeError(f"Failed to load Spotify data from {filepath}") from e
 
 
-    def load_lyrics_data(self, filename: str='spotify_millsongdata.csv') -> pd.DataFrame:
+    def load_lyrics_data(self, filename: str = 'spotify_millsongdata.csv') -> pd.DataFrame:
         """
         Load Million Song Dataset lyrics.
 
-        Arguments:
-            filename (str): Name of the lyrics CSV file
+        Parameters
+        ----------
+        filename : str, default='spotify_millsongdata.csv'
+            Name of the lyrics CSV file
 
-        Returns:
-            pd.DataFrame: Loaded lyrics data
-        
-        Raises:
-            FileNotFoundError: If the file does not exist
-            ValueError: If expected columns are missing
-            RuntimeError: If any other error occurs during loading
+        Returns
+        -------
+        pd.DataFrame
+            Loaded lyrics data with artist, song, and text columns
+
+        Raises
+        ------
+        FileNotFoundError
+            If the file does not exist
+        ValueError
+            If expected columns ('artist', 'song', 'text') are missing
+        RuntimeError
+            If any other error occurs during loading
         """
         filepath = self.data_directory / filename
 
@@ -140,17 +178,37 @@ class DataLoader:
         return df
 
 
-    def load_all_data(self, gtzan_file='features_3_sec.csv', spotify_file='spotify_top_songs_audio_features.csv',lyrics_file='spotify_millsongdata.csv'):
+    def load_all_data(
+        self,
+        gtzan_file: str = 'features_3_sec.csv', 
+        spotify_file: str = 'spotify_top_songs_audio_features.csv',
+        lyrics_file: str = 'spotify_millsongdata.csv'
+        ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
         """
         Load all three datasets at once.
-        
-        Arguments:
-            gtzan_file (str): GTZAN filename
-            spotify_file (str): Spotify filename
-            lyrics_file (str): Lyrics filename
-                
-        Returns:
-            tuple: (gtzan_data, spotify_data, lyrics_data)
+
+        Parameters
+        ----------
+        gtzan_file : str, default='features_3_sec.csv'
+            GTZAN filename
+        spotify_file : str, default='spotify_top_songs_audio_features.csv'
+            Spotify filename
+        lyrics_file : str, default='spotify_millsongdata.csv'
+            Lyrics filename
+
+        Returns
+        -------
+        tuple of pd.DataFrame
+            A tuple containing (gtzan_data, spotify_data, lyrics_data)
+
+        Raises
+        ------
+        FileNotFoundError
+            If any of the files do not exist
+        ValueError
+            If expected columns are missing in any dataset
+        RuntimeError
+            If any other error occurs during loading
         """
 
         self.load_gtzan_data(gtzan_file)
@@ -163,12 +221,19 @@ class DataLoader:
 
         return self.gtzan_data, self.spotify_data, self.lyrics_data
 
-    def get_data_summary(self):
+    def get_data_summary(self) -> Dict[str, Dict[str, Any]]:
         """
         Get a summary of the loaded datasets.
 
-        Returns:
-            dict: Summary of each dataset
+        Returns
+        -------
+        dict of str to dict
+            Dictionary with dataset names as keys ('gtzan', 'spotify', 'lyrics')
+            and summary dictionaries as values containing:
+            - 'shape': tuple of (rows, columns)
+            - 'columns': list of column names
+            - 'genres': list of unique genres (GTZAN only)
+            - 'missing_values': count of missing values
         """
         data_summary = {}
 
@@ -196,17 +261,32 @@ class DataLoader:
         
         return data_summary
 
-    def save_processed_data(self, data: pd.DataFrame, filename: str, subdir: str = 'processed') -> Path:
+    def save_processed_data(
+        self,
+        data: pd.DataFrame,
+        filename: str, subdir: str = 'processed'
+        ) -> Path:
         """
         Save processed data to CSV.
 
-        Arguments:
-            data (pd.DataFrame): Data to save
-            filename (str): Output filename
-            subdir (str): Subdirectory within data_direction
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Data to save
+        filename : str
+            Output filename
+        subdir : str, default='processed'
+            Subdirectory within data_directory
 
-        Returns:
-            pathlib.Path: Path to the saved CSV file
+        Returns
+        -------
+        Path
+            Path to the saved CSV file
+
+        Raises
+        ------
+        RuntimeError
+            If saving fails
         """
         output_dir = self.data_directory / subdir
         output_dir.mkdir(parents=True, exist_ok=True)

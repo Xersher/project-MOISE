@@ -1,8 +1,9 @@
 """
 Mood Clustering Module - Circumplex Model Implementation
+========================================================
 
-This module implements unsupervised learning (K-means) to discover "mood families" 
-by clustering songs based on their sonic profile, guided by the Circumplex Model 
+This module implements unsupervised learning (K-means) to discover "mood families"
+by clustering songs based on their sonic profile, guided by the Circumplex Model
 of Affect (Russell, 1980).
 
 The Circumplex Model structures emotions along two fundamental dimensions:
@@ -13,7 +14,7 @@ These two dimensions form four quadrants representing distinct emotional states,
 naturally suggesting K=4 clusters for mood classification.
 """
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 
 import pandas as pd
 import numpy as np
@@ -23,49 +24,56 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import silhouette_score
 import matplotlib.pyplot as plt
 import seaborn as sns
-
-
-
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-
-import pandas as pd
-import numpy as np
-from sklearn.cluster import KMeans
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import silhouette_score
-import matplotlib.pyplot as plt
-import seaborn as sns
-
+import joblib
 
 class MoodClusterer:
     """
     Mood clustering based on the Circumplex Model of Affect (Russell, 1980).
-    
+
     Uses K=4 clusters corresponding to the four quadrants of the Circumplex:
     - Quadrant 1: High Energy, Positive Valence (Happy/Excited)
     - Quadrant 2: High Energy, Negative Valence (Angry/Tense)
     - Quadrant 3: Low Energy, Negative Valence (Sad/Melancholic)
     - Quadrant 4: Low Energy, Positive Valence (Calm/Peaceful)
+
+    Attributes
+    ----------
+    n_clusters : int
+        Number of clusters, fixed at 4 based on Circumplex Model
+    output_directory : Path
+        Directory to save figures and results
+    scaler : StandardScaler
+        Scikit-learn scaler for feature normalization
+    kmeans : KMeans or None
+        Fitted KMeans model
+    pca : PCA or None
+        Fitted PCA model for visualization
+    cluster_labels : np.ndarray or None
+        Cluster assignments for each song
+    cluster_descriptions : pd.DataFrame or None
+        Summary statistics for each cluster
+    quadrants : dict
+        Circumplex quadrant definitions with names, emotions, and colors
     """
     
     def __init__(self, output_directory: str = '/files/project-MOISE/results/figures') -> None:
         """
-        Initialize the Mood Clusterer with K=4 (Circumplex Model).
-        
-        Arguments:
-            output_directory (str): Directory to save figures
+        Initialize the MoodClusterer with K=4 (Circumplex Model).
+
+        Parameters
+        ----------
+        output_directory : str, default='/files/project-MOISE/results/figures'
+            Directory to save figures and results
         """
-        self.n_clusters = 4  # Fixed at 4 based on Circumplex Model
-        self.output_directory = Path(output_directory)
+        self.n_clusters: int = 4  # Fixed at 4 based on Circumplex Model
+        self.output_directory: Path = Path(output_directory)
         self.output_directory.mkdir(parents=True, exist_ok=True)
         
-        self.scaler = StandardScaler()
-        self.kmeans = None
-        self.pca = None
-        self.cluster_labels = None
-        self.cluster_descriptions = None
+        self.scaler: StandardScaler = StandardScaler()
+        self.kmeans: Optional[KMeans] = None
+        self.pca: Optional[PCA] = None
+        self.cluster_labels: Optional[np.ndarray] = None
+        self.cluster_descriptions: Optional[pd.DataFrame] = None
         
         # Circumplex quadrant definitions
         self.quadrants = {
@@ -94,17 +102,38 @@ class MoodClusterer:
         print(f"MoodClusterer initialized with K={self.n_clusters} (Circumplex Model)")
         print("Based on Russell (1980): 2D emotion space (Valence × Arousal)")
     
-    def visualize_circumplex_theory(self, data: pd.DataFrame, valence_col: str = 'valence', energy_col: str = 'energy', save_path: Optional[Path] = None,
-                                    show: bool = False) -> None:
+    def visualize_circumplex_theory(
+        self,
+        data: pd.DataFrame,
+        valence_col: str = 'valence',
+        energy_col: str = 'energy',
+        save_path: Optional[Path] = None,
+        show: bool = False
+        ) -> None:
         """
         Visualize the theoretical Circumplex Model with actual data distribution.
-        
-        Arguments:
-            data (pd.DataFrame): Music data
-            valence_col (str): Column name for valence
-            energy_col (str): Column name for energy
-            save_path (Optional[Path]): Path to save figure
-            show (bool): Whether to display the plot
+
+        Creates a scatter plot of songs in the Valence × Energy space with
+        quadrant boundaries and labels based on the Circumplex Model.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Music data with valence and energy columns
+        valence_col : str, default='valence'
+            Column name for valence (0-1 scale)
+        energy_col : str, default='energy'
+            Column name for energy/arousal (0-1 scale)
+        save_path : Path or str, optional
+            Path to save figure. If None, saves to
+            '{output_directory}/15_circumplex_model.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         if save_path is None:
             save_path = self.output_directory / '15_circumplex_model.png'
@@ -196,16 +225,25 @@ class MoodClusterer:
     def fit_clusters(self, data: pd.DataFrame, feature_columns: Optional[List[str]] = None) -> np.ndarray:
         """
         Fit K-means clustering on the data with K=4 (Circumplex Model).
-        
-        Reorders clusters to match Circumplex quadrants based on mean valence and energy.
-        
-        Args:
-            data (pd.DataFrame): Music data
-            feature_columns (Optional[List[str]]): Columns to use for clustering. 
-                If None, uses all numeric columns
-        
-        Returns:
-            np.ndarray: Cluster labels for each song (reordered to match quadrants)
+
+        Reorders clusters to match Circumplex quadrants based on mean
+        valence and energy of each cluster.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Music data with audio features
+        feature_columns : list of str, optional
+            Columns to use for clustering. If None, uses all numeric columns.
+
+        Returns
+        -------
+        np.ndarray
+            Cluster labels for each song (reordered to match quadrants):
+            - 0: High Energy Positive
+            - 1: High Energy Negative
+            - 2: Low Energy Negative
+            - 3: Low Energy Positive
         """
         print(f"\nFitting K-means clustering with K={self.n_clusters} (Circumplex Model)...")
         
@@ -299,19 +337,30 @@ class MoodClusterer:
         
         return self.cluster_labels
     
-    def apply_pca(self, data: pd.DataFrame, feature_columns: Optional[List[str]] = None, 
-                    n_components: int = 2, refit_scaler: bool = True) -> np.ndarray:
+    def apply_pca(self,
+        data: pd.DataFrame,
+        feature_columns: Optional[List[str]] = None, 
+        n_components: int = 2,
+        refit_scaler: bool = True
+        ) -> np.ndarray:
         """
         Apply PCA for dimensionality reduction and visualization.
-        
-        Arguments:
-            data (pd.DataFrame): Music data
-            feature_columns (Optional[List[str]]): Columns to use for PCA
-            n_components (int): Number of PCA components
-            refit_scaler (bool): Whether to refit the scaler
-        
-        Returns:
-            np.ndarray: PCA-transformed data
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Music data with audio features
+        feature_columns : list of str, optional
+            Columns to use for PCA. If None, uses all numeric columns.
+        n_components : int, default=2
+            Number of PCA components to compute
+        refit_scaler : bool, default=True
+            Whether to refit the StandardScaler
+
+        Returns
+        -------
+        np.ndarray
+            PCA-transformed data with shape (n_samples, n_components)
         """
         print(f"Applying PCA with {n_components} components...")
         
@@ -343,18 +392,29 @@ class MoodClusterer:
     def describe_clusters(self, data: pd.DataFrame, feature_columns: Optional[List[str]] = None) -> pd.DataFrame:
         """
         Describe each cluster using average values of key features.
-        
+
         Since clusters are reordered to match quadrants, cluster_id = quadrant_id.
-        
-        Arguments:
-            data (pd.DataFrame): Music data
-            feature_columns (Optional[List[str]]): Features to describe clusters with
-        
-        Returns:
-            pd.DataFrame: Cluster descriptions
-        
-        Raises:
-            RuntimeError: If clusters haven't been fitted yet
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Music data with audio features
+        feature_columns : list of str, optional
+            Features to describe clusters with. If None, uses common
+            audio features (tempo, valence, energy, etc.)
+
+        Returns
+        -------
+        pd.DataFrame
+            Cluster descriptions with columns:
+            - 'cluster': cluster ID (0-3)
+            - 'count': number of songs in cluster
+            - 'avg_{feature}': mean value for each feature
+
+        Raises
+        ------
+        RuntimeError
+            If clusters haven't been fitted yet
         """
         print("Describing clusters...")
         
@@ -409,11 +469,15 @@ class MoodClusterer:
     def name_clusters(self) -> Optional[Dict[int, str]]:
         """
         Name clusters based on Circumplex Model quadrants.
-        
-        Since clusters are reordered to match quadrants, cluster_id = quadrant_id.
-        
-        Returns:
-            Optional[Dict[int, str]]: Mapping of cluster ID to name
+
+        Assigns descriptive names based on quadrant and additional
+        modifiers from audio features (e.g., tempo, danceability).
+
+        Returns
+        -------
+        dict of int to str or None
+            Mapping of cluster ID to descriptive name.
+            Returns None if clusters haven't been described yet.
         """
         if self.cluster_descriptions is None:
             print("Must describe clusters first!")
@@ -471,17 +535,38 @@ class MoodClusterer:
         
         return cluster_names
     
-    def plot_clusters_2d(self, data: pd.DataFrame, feature_columns: Optional[List[str]] = None, 
-                        save_path: Optional[Path] = None, show: bool = False, refit: bool = False) -> None:
+    def plot_clusters_2d(
+        self,
+        data: pd.DataFrame,
+        feature_columns: Optional[List[str]] = None, 
+        save_path: Optional[Path] = None,
+        show: bool = False,
+        refit: bool = False
+        ) -> plt.Figure:
         """
         Visualize clusters in 2D space using PCA.
-        
-        Arguments:
-            data (pd.DataFrame): Music data
-            feature_columns (Optional[List[str]]): Features for PCA
-            save_path (Optional[Path]): Path to save figure
-            show (bool): Whether to display the plot
-            refit (bool): Force refitting of clusters
+
+        Creates a scatter plot of songs in PCA space, colored by
+        cluster assignment with Circumplex quadrant colors.
+
+        Parameters
+        ----------
+        data : pd.DataFrame
+            Music data with audio features
+        feature_columns : list of str, optional
+            Features for PCA. If None, uses all numeric columns.
+        save_path : Path or str, optional
+            Path to save figure. If None, saves to
+            '{output_directory}/13_mood_clusters_2d.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+        refit : bool, default=False
+            Force refitting of clusters and PCA
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         print("Creating 2D cluster visualization...")
         
@@ -518,7 +603,7 @@ class MoodClusterer:
         cluster_names = self.name_clusters()
         
         # Create plot
-        plt.figure(figsize=(12, 8))
+        fig = plt.figure(figsize=(12, 8))
         
         # Plot each cluster with Circumplex colors
         for cluster_id in range(self.n_clusters):
@@ -550,17 +635,33 @@ class MoodClusterer:
             plt.close()
         
         print(f"✓ 2D cluster visualization saved to {save_path}")
+
+        return fig
     
-    def plot_cluster_profiles(self, save_path: Optional[Path] = None, show: bool = False) -> None:
+    def plot_cluster_profiles(self, save_path: Optional[Path] = None, show: bool = False) -> plt.Figure:
         """
         Create bar plots showing the profile of each cluster.
-        
-        Arguments:
-            save_path (Optional[Path]): Path to save figure
-            show (bool): Whether to display the plot
-        
-        Raises:
-            RuntimeError: If clusters haven't been described yet
+
+        Displays normalized feature values for each cluster as
+        horizontal bar charts, using Circumplex quadrant colors.
+
+        Parameters
+        ----------
+        save_path : Path or str, optional
+            Path to save figure. If None, saves to
+            '{output_directory}/14_cluster_profiles.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
+
+        Raises
+        ------
+        RuntimeError
+            If clusters haven't been described yet
         """
         if self.cluster_descriptions is None:
             raise RuntimeError("Must describe clusters first!")
@@ -621,13 +722,20 @@ class MoodClusterer:
             plt.close()
         
         print(f"✓ Cluster profiles saved to {save_path}")
+
+        return  fig
     
     def get_cluster_summary(self) -> str:
         """
         Get a text summary of all clusters based on Circumplex Model.
-        
-        Returns:
-            str: Markdown-formatted summary
+
+        Returns
+        -------
+        str
+            Markdown-formatted summary including:
+            - Cluster sizes and percentages
+            - Associated emotions
+            - Key audio feature values
         """
         if self.cluster_descriptions is None:
             return "No clusters fitted yet."

@@ -1,12 +1,19 @@
 """
 Genre Classification Module
+===========================
 
-This module implements various machine learning models for music genre classification
-using the GTZAN dataset.
+This module implements various machine learning models for music genre 
+classification using the GTZAN dataset.
+
+Models included:
+- Random Forest
+- Support Vector Machine (SVM)
+- Gradient Boosting
+- Multi-Layer Perceptron (MLP)
 """
 
 from pathlib import Path
-from typing import Dict, Tuple, Optional, Any
+from typing import Dict, Tuple, Optional, Any, List
 
 import pandas as pd
 import numpy as np
@@ -22,73 +29,130 @@ import joblib
 
 
 class GenreClassifier:
-
     """
     Class used to create and evaluate genre classification models.
 
-    Attributes:
-        model_directory (Path): Directory to save trained models
-        models (dict): Dictionary of ML models to train
-        best_model: The best performing model
-        best_model_name (str): Name of the best model
-        label_encoder (LabelEncoder): Encoder for genre labels
-        results (dict): Training results for all models
+    This class provides methods to train multiple classifiers, compare their
+    performance, visualize results, and persist the best model.
+
+    Attributes
+    ----------
+    model_directory : Path
+        Directory to save trained models
+    models : dict of str to sklearn estimator
+        Dictionary of ML models to train
+    best_model : sklearn estimator or None
+        The best performing model after training
+    best_model_name : str or None
+        Name of the best model
+    label_encoder : LabelEncoder or None
+        Encoder for genre labels
+    results : dict
+        Training results for all models
     """
 
     def __init__(self, model_directory: str = '/files/project-MOISE/results/models') -> None:
         """
         Initialize the GenreClassifier.
-        
-        Args:
-            model_directory: Directory to save trained models
+
+        Parameters
+        ----------
+        model_directory : str, default='/files/project-MOISE/results/models'
+            Directory to save trained models. Created if it doesn't exist.
         """
-        self.model_directory = Path(model_directory)
+        self.model_directory: Path = Path(model_directory)
         self.model_directory.mkdir(parents=True, exist_ok=True)
 
-        self.models = {}
-        self.best_model = None
-        self.best_model_name = None
-        self.label_encoder = None
-        self.results = {}
+        self.models: Dict[str, Any] = {}
+        self.best_model: Optional[Any] = None
+        self.best_model_name: Optional[str] = None
+        self.label_encoder: Optional[LabelEncoder] = None
+        self.results: Dict[str, Any] = {}
         print(f"Model directory set to: {self.model_directory}")
         
     def create_models(self) -> Dict[str, Any]:
-        """        
+        """
         Create a dictionary of machine learning models for genre classification.
-        
-        These hyperparameters have been chosen based on typical best practices.
 
-        Returns:
-            Dictionary of model name to model instance
+        Instantiates four classifiers with tuned hyperparameters based on
+        typical best practices for audio classification tasks.
+
+        Returns
+        -------
+        dict of str to sklearn estimator
+            Dictionary mapping model names to model instances:
+            - 'RandomForest': RandomForestClassifier with n_jobs=-1
+            - 'SVM': SVC with RBF kernel
+            - 'GradientBoosting': GradientBoostingClassifier
+            - 'MLP': MLPClassifier with early stopping
+
+        Notes
+        -----
+        RandomForest uses n_jobs=-1 for parallel tree construction.
         """
         self.models = {
-            'RandomForest': RandomForestClassifier(n_estimators=300, max_depth=20, min_samples_split=5,
-                                                  min_samples_leaf=2, random_state=42, n_jobs=-1),
+            'RandomForest': RandomForestClassifier(
+                n_estimators=300, max_depth=20, min_samples_split=5,
+                min_samples_leaf=2, random_state=42, n_jobs=-1),
             'SVM': SVC(kernel='rbf', C=10, gamma='scale', random_state=42),
-            'GradientBoosting': GradientBoostingClassifier(n_estimators=100, learning_rate=0.1, max_depth=5, random_state=42),
+            'GradientBoosting': GradientBoostingClassifier(
+                n_estimators=100, learning_rate=0.1, max_depth=5, random_state=42
+                ),
             'MLP': MLPClassifier(hidden_layer_sizes=(100,50), max_iter=500, random_state=42, early_stopping=True)
         }
         print("Models created: ", list(self.models.keys())," for comparison.")
         return self.models
     
-    def train_and_evaluate(self, X_train: pd.DataFrame, y_train: pd.Series, X_test: pd.DataFrame, y_test: pd.Series, label_encoder=None) -> Dict[str, Any]:
+    def train_and_evaluate(
+        self,
+        X_train: pd.DataFrame,
+        y_train: np.ndarray,
+        X_test: pd.DataFrame,
+        y_test: np.ndarray,
+        label_encoder: Optional[LabelEncoder] = None
+        ) -> Dict[str, Any]:
         """
-        Train and evaluate each model and evaluate their performance.
-        
-        Arguments:
-            X_train (pd.DataFrame): Training features.
-            y_train (pd.Series): Training labels.
-            X_test (pd.DataFrame): Testing features.
-            y_test (pd.Series): Testing labels.
-            label_encoder (LabelEncoder, optional): Label encoder for decoding labels. Defaults to None.
+        Train all models and evaluate their performance.
 
-        Returns:
-            dict: A dictionary containing results for each model.
+        For each model, computes training/test accuracy, precision, recall,
+        F1-score, and 5-fold cross-validation scores. Selects the best model
+        based on the average of test accuracy and CV mean accuracy.
 
-        Raises:
-            ValueError: If input data is invalid
-            RuntimeError: If model training fails
+        Parameters
+        ----------
+        X_train : pd.DataFrame
+            Training features
+        y_train : np.ndarray
+            Training labels (encoded as integers)
+        X_test : pd.DataFrame
+            Test features
+        y_test : np.ndarray
+            Test labels (encoded as integers)
+        label_encoder : LabelEncoder, optional
+            Fitted label encoder for decoding predictions back to class names
+
+        Returns
+        -------
+        dict of str to dict
+            Dictionary mapping model names to result dictionaries containing:
+            - 'model': trained model instance
+            - 'train_accuracy': float
+            - 'test_accuracy': float
+            - 'precision': float (weighted average)
+            - 'recall': float (weighted average)
+            - 'f1': float (weighted average)
+            - 'cv_mean': float (mean CV accuracy)
+            - 'cv_std': float (CV standard deviation)
+            - 'predictions': np.ndarray (test set predictions)
+
+        Raises
+        ------
+        ValueError
+            If input data is invalid (wrong type, empty, or mismatched lengths)
+        RuntimeError
+            If no models are successfully trained
         """
+        # Validate inputs
         if not isinstance(X_train, pd.DataFrame):
             raise ValueError("X_train must be a pandas DataFrame")
         if not isinstance(X_test, pd.DataFrame):
@@ -126,7 +190,7 @@ class GenreClassifier:
                 precision, recall, f1, _ = precision_recall_fscore_support(y_test, y_pred_test, average='weighted', zero_division=0)
                 
                 # Cross-validation (on training set)
-                cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
+                cv_scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy', n_jobs=-1)
                 
                 results[model_name] = {
                     'model': model,
@@ -168,13 +232,39 @@ class GenreClassifier:
         self.results = results
         return results
 
-    def plot_model_comparison(self, results: Dict[str, Any], save_path: Optional[Path]=None, show: bool=False) -> plt.Figure:
+    def plot_model_comparison(
+        self,
+        results: Dict[str, Any],
+        save_path: Optional[Path]=None,
+        show: bool=False
+        ) -> plt.Figure:
         """
         Plot comparison of model performances.
-        
-        Arguments:
-            results (dict): Results from train_and_evaluate
-            save_path (str): Path to save the figure
+
+        Creates a two-panel figure showing:
+        1. Train vs test accuracy bar chart
+        2. Cross-validation scores with error bars
+
+        Parameters
+        ----------
+        results : dict, optional
+            Results dictionary from train_and_evaluate. If None, uses
+            self.results from the last training run.
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{model_directory}/../figures/04_model_comparison.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
+
+        Raises
+        ------
+        ValueError
+            If no results are available to plot
         """
         if results is None:
             results = self.results
@@ -234,14 +324,30 @@ class GenreClassifier:
 
         return fig
 
-    def plot_confusion_matrix(self, y_test: np.ndarray, y_pred: np.ndarray, save_path: Optional[Path]=None, show: bool=False) -> None:
+    def plot_confusion_matrix(
+        self,
+        y_test: np.ndarray,
+        y_pred: np.ndarray,
+        save_path: Optional[Path]=None,
+        show: bool=False
+        ) -> None:
         """
         Plot confusion matrix for the best model.
-        
-        Arguments:
-            y_test: True labels
-            y_pred: Predicted labels
-            save_path (str): Path to save the figure
+
+        Creates a heatmap visualization of the confusion matrix with
+        class labels on both axes.
+
+        Parameters
+        ----------
+        y_test : np.ndarray
+            True labels (encoded as integers)
+        y_pred : np.ndarray
+            Predicted labels from the model
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{model_directory}/../figures/05_confusion_matrix.png'
+        show : bool, default=False
+            Whether to display the plot interactively
         """
         if save_path is None:
             save_path = self.model_directory.parent / 'figures' / '05_confusion_matrix.png'
@@ -259,7 +365,7 @@ class GenreClassifier:
         else:
             class_names = [f'Class {i}' for i in range(len(np.unique(y_test)))]
         
-        plt.figure(figsize=(12, 10))
+        fig = plt.figure(figsize=(12, 10))
         sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=class_names, yticklabels=class_names,cbar_kws={'label': 'Count'})
         plt.title(f'Confusion Matrix - {self.best_model_name}', fontweight='bold', fontsize=14)
         plt.ylabel('True Label', fontsize=12)
@@ -271,16 +377,33 @@ class GenreClassifier:
         else:
             plt.close()
         print(f"Confusion matrix saved to {save_path}")
+        return fig
     
     def save_model(self, filename: Optional[str]=None) -> None:
         """
-        Save the best trained model.
+        Save the best trained model using joblib serialization.
 
-        Args:
-            filename: Optional custom filename (without path)
-            
-        Raises:
-            RuntimeError: If no model has been trained
+        Saves the model along with metadata including model name,
+        label encoder, and training results for reproducibility.
+
+        Parameters
+        ----------
+        filename : str, optional
+            Custom filename (without path). If None, uses
+            'best_genre_classifier_{model_name}.pkl'
+
+        Raises
+        ------
+        RuntimeError
+            If no model has been trained yet
+
+        Notes
+        -----
+        The saved file contains a dictionary with keys:
+        - 'model': the trained sklearn estimator
+        - 'model_name': string identifier
+        - 'label_encoder': fitted LabelEncoder
+        - 'results': full training results dictionary
         """
         if self.best_model is None:
             raise RuntimeError("No model has been trained yet. Train a model first.")
@@ -303,14 +426,22 @@ class GenreClassifier:
 
     def load_model(self, filepath: str) -> None:
         """
-        Load a saved model.
-        
-        Args:
-            filepath: Path to the saved model file
-            
-        Raises:
-            FileNotFoundError: If model file doesn't exist
-            RuntimeError: If loading fails
+        Load a previously saved model.
+
+        Restores the model, model name, label encoder, and results
+        from a joblib-serialized file.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to the saved model file (.pkl)
+
+        Raises
+        ------
+        FileNotFoundError
+            If the model file does not exist
+        RuntimeError
+            If loading fails due to file corruption or incompatibility
         """
         filepath = Path(filepath)
         
@@ -331,12 +462,24 @@ class GenreClassifier:
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         """
         Make predictions with the best model.
-        
-        Args:
-            X: Features to predict
-            
-        Returns:
-            array: Predicted labels
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Features to predict, must match training feature columns
+
+        Returns
+        -------
+        np.ndarray
+            Predicted labels. If label_encoder is available, returns
+            original class names; otherwise returns encoded integers.
+
+        Raises
+        ------
+        RuntimeError
+            If no model has been trained or loaded
+        ValueError
+            If X is not a pandas DataFrame
         """
         if self.best_model is None:
             raise RuntimeError("No model has been trained yet. Train or load a model first.")

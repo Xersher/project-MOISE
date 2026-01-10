@@ -1,8 +1,16 @@
 """
 Popularity Prediction Module
+============================
 
 This module implements regression models to predict song popularity (streams)
 based on Spotify audio features.
+
+Models included:
+- Linear Regression
+- Ridge Regression
+- Lasso Regression
+- Random Forest Regressor (with n_jobs=-1)
+- Gradient Boosting Regressor
 """
 
 from pathlib import Path
@@ -22,40 +30,59 @@ import joblib
 class PopularityPredictor:
     """
     Class to build and evaluate popularity prediction models.
-        
-    Attributes:
-        model_directory (Path): Directory to save trained models
-        models (dict): Dictionary of regression models
-        best_model: The best performing model
-        best_model_name (str): Name of the best model
-        results (dict): Training results for all models
+
+    This class provides methods to train multiple regression models,
+    compare their performance, visualize results, and persist the best model.
+
+    Attributes
+    ----------
+    model_directory : Path
+        Directory to save trained models
+    models : dict of str to sklearn estimator
+        Dictionary of regression models
+    best_model : sklearn estimator or None
+        The best performing model after training
+    best_model_name : str or None
+        Name of the best model
+    results : dict
+        Training results for all models
+    feature_names : list of str or None
+        Names of features used in training
     """
     
-    def __init__(self, 
-        model_directory: str='/files/project-MOISE/results/models'
-        ) -> None:
+    def __init__(self, model_directory: str = '/files/project-MOISE/results/models') -> None:
         """
-        Initialize the Popularity Predictor.
-        
-        Arguments:
-            model_directory (str): Directory to save trained models
+        Initialize the PopularityPredictor.
+
+        Parameters
+        ----------
+        model_directory : str, default='/files/project-MOISE/results/models'
+            Directory to save trained models
         """
-        self.model_directory = Path(model_directory)
+        self.model_directory: Path = Path(model_directory)
         self.model_directory.mkdir(parents=True, exist_ok=True)
         
-        self.models = {}
-        self.best_model = None
-        self.best_model_name = None
-        self.results = {}
+        self.models: Dict[str, Any] = {}
+        self.best_model: Optional[Any] = None
+        self.best_model_name: Optional[str] = None
+        self.results: Dict[str, Any] = {}
+        self.feature_names: Optional[List[str]] = None
         
         print(f"PopularityPredictor initialized. Models will be saved to: {self.model_directory}")
     
     def create_models(self) -> Dict[str, Any]:
         """
         Create multiple regression models to compare.
-        
-        Return:
-            dict: Dictionary of regression models
+
+        Returns
+        -------
+        dict of str to sklearn estimator
+            Dictionary mapping model names to regression model instances:
+            - 'Linear Regression': LinearRegression
+            - 'Ridge': Ridge with alpha=1.0
+            - 'Lasso': Lasso with alpha=0.1
+            - 'Random Forest': RandomForestRegressor with n_jobs=-1
+            - 'Gradient Boosting': GradientBoostingRegressor
         """
         self.models = {
             'Linear Regression': LinearRegression(),
@@ -78,22 +105,55 @@ class PopularityPredictor:
         print(f"Created {len(self.models)} models for comparison")
         return self.models
     
-    def train_and_evaluate(self, X_train: pd.DataFrame, X_test: pd.DataFrame, y_train: pd.Series, y_test: pd.Series) -> Dict[str, Any]:
+    def train_and_evaluate(
+        self,
+        X_train: pd.DataFrame,
+        X_test: pd.DataFrame,
+        y_train: pd.Series,
+        y_test: pd.Series
+        ) -> Dict[str, Any]:
         """
         Train all models and evaluate their performance.
-        
-        Arguments:
-            X_train: Training features
-            X_test: Test features
-            y_train: Training target
-            y_test: Test target
-            
-        Returns:
-            dict: Results for each model
-        
-        Raises:
-            ValueError: If input data is invalid
-            RuntimeError: If all models fail to train
+
+        For each model, computes R², MAE, RMSE, MAPE, and 5-fold
+        cross-validation scores. Selects the best model based on
+        the average of test R² and CV mean R².
+
+        Parameters
+        ----------
+        X_train : pd.DataFrame
+            Training features
+        X_test : pd.DataFrame
+            Test features
+        y_train : pd.Series
+            Training target (log-transformed streams)
+        y_test : pd.Series
+            Test target (log-transformed streams)
+
+        Returns
+        -------
+        dict of str to dict
+            Dictionary mapping model names to result dictionaries containing:
+            - 'model': trained model instance
+            - 'train_r2': float
+            - 'test_r2': float
+            - 'mae': float (Mean Absolute Error)
+            - 'rmse': float (Root Mean Squared Error)
+            - 'mape': float (Mean Absolute Percentage Error)
+            - 'cv_mean': float (mean CV R²)
+            - 'cv_std': float (CV standard deviation)
+            - 'predictions': np.ndarray (test set predictions)
+
+        Raises
+        ------
+        ValueError
+            If input data is invalid (wrong type, empty, or mismatched lengths)
+        RuntimeError
+            If all models fail to train
+
+        Notes
+        -----
+        Cross-validation uses n_jobs=-1 for parallel fold computation.
         """
         if not isinstance(X_train, pd.DataFrame):
             raise ValueError("X_train must be a pandas DataFrame")
@@ -115,6 +175,7 @@ class PopularityPredictor:
         print("=" * 70)
         
         best_score = -np.inf # R² can be negative
+        self.feature_names = list(X_train.columns)
         
         for model_name, model in self.models.items():
             print(f"\nTraining {model_name}...")
@@ -187,13 +248,33 @@ class PopularityPredictor:
         self.results = results
         return results
     
-    def plot_model_comparison(self, results: Dict[str, Any], save_path: Optional[Path]=None, show: bool=False) -> None:
+    def plot_model_comparison(
+        self,
+        results: Dict[str, Any],
+        save_path: Optional[Path]=None,
+        show: bool=False
+        ) -> plt.Figure:
         """
         Plot comparison of model performances.
-        
-        Arguments:
-            results (dict): Results from train_and_evaluate
-            save_path (str): Path to save the figure
+
+        Creates a two-panel figure showing:
+        1. R² score comparison across models
+        2. MAE comparison across models
+
+        Parameters
+        ----------
+        results : dict
+            Results dictionary from train_and_evaluate
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{model_directory}/../figures/10_popularity_model_comparison.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         if save_path is None:
             save_path = self.model_directory.parent / 'figures' / '10_popularity_model_comparison.png'
@@ -232,15 +313,39 @@ class PopularityPredictor:
         else:
             plt.close()
         print(f"Model comparison plot saved to {save_path}")
+
+        return fig
     
-    def plot_predictions(self, y_test: pd.Series, y_pred: np.ndarray, save_path: Optional[Path]=None, show: bool=False) -> None:
+    def plot_predictions(
+        self,
+        y_test: pd.Series,
+        y_pred: np.ndarray,
+        save_path: Optional[Path]=None,
+        show: bool=False
+        ) -> plt.Figure:
         """
         Plot actual vs predicted values.
-        
-        Arguments:
-            y_test: True values
-            y_pred: Predicted values
-            save_path (str): Path to save the figure
+
+        Creates a two-panel figure showing:
+        1. Scatter plot of actual vs predicted with perfect prediction line
+        2. Residual plot
+
+        Parameters
+        ----------
+        y_test : pd.Series
+            True target values
+        y_pred : np.ndarray
+            Predicted values from the model
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{model_directory}/../figures/11_popularity_predictions.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         if save_path is None:
             save_path = self.model_directory.parent / 'figures' / '11_popularity_predictions.png'
@@ -276,15 +381,40 @@ class PopularityPredictor:
         else:
             plt.close()
         print(f"Predictions plot saved to {save_path}")
+
+        return fig
     
-    def plot_feature_importance(self, feature_names: List[str], top_n: int=15, save_path: Optional[Path]=None, show: bool=False) -> None:
+    def plot_feature_importance(
+        self,
+        feature_names: List[str],
+        top_n: int=15,
+        save_path: Optional[Path]=None,
+        show: bool=False
+        ) -> plt.Figure:
         """
         Plot feature importance for tree-based models.
-        
-        Arguments:
-            feature_names (list): Names of features
-            top_n (int): Number of top features to show
-            save_path (str): Path to save the figure
+
+        Parameters
+        ----------
+        feature_names : list of str
+            Names of features used in training
+        top_n : int, default=15
+            Number of top features to display
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{model_directory}/../figures/12_feature_importance.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure or None
+            The generated figure object, or None if the best model
+            doesn't support feature importance
+
+        Notes
+        -----
+        Only works for Random Forest and Gradient Boosting models.
         """
         if save_path is None:
             save_path = self.model_directory.parent / 'figures' / '12_feature_importance.png'
@@ -300,7 +430,7 @@ class PopularityPredictor:
         importances = self.best_model.feature_importances_
         indices = np.argsort(importances)[::-1][:top_n]
         
-        plt.figure(figsize=(10, 8))
+        fig = plt.figure(figsize=(10, 8))
         plt.barh(range(n_display), importances[indices], color='darkgreen')
         plt.yticks(range(n_display), [feature_names[i] for i in indices])
         plt.xlabel('Importance', fontsize=12)
@@ -314,16 +444,41 @@ class PopularityPredictor:
         else:
             plt.close()
         print(f"Feature importance plot saved to {save_path}")
+
+        return fig
     
-    def analyze_key_features(self, X: pd.DataFrame, y: pd.Series, feature_names: List[str], save_path: Optional[Path]=None) -> None:
+    def analyze_key_features(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        feature_names: List[str],
+        save_path: Optional[Path]=None,
+        show: bool=False
+        ) -> plt.Figure:
         """
         Analyze the relationship between key features and popularity.
-        
-        Arguments:
-            X: Features
-            y: Target
-            feature_names (list): Names of features
-            save_path (str): Path to save the figure
+
+        Creates scatter plots for the top 4 features most correlated
+        with the target variable.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Features
+        y : pd.Series
+            Target variable
+        feature_names : list of str
+            Names of features
+        save_path : Path or str, optional
+            Path to save the figure. If None, saves to
+            '{model_directory}/../figures/13_key_feature_analysis.png'
+        show : bool, default=False
+            Whether to display the plot interactively
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object
         """
         if save_path is None:
             save_path = self.model_directory.parent / 'figures' / '13_key_feature_analysis.png'
@@ -354,37 +509,129 @@ class PopularityPredictor:
         
         plt.tight_layout()
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
-        plt.show()
+        if show:
+            plt.show()
+        else:
+            plt.close()
         print(f"✓ Key features analysis saved to {save_path}")
+
+        return fig
     
-    def save_model(self, filename: Optional[str]=None) -> None:
-        """Save the best trained model."""
+    def save_model(self, filename: Optional[str] = None) -> Path:
+        """
+        Save the best trained model using joblib serialization.
+
+        Saves the model along with metadata including model name,
+        feature names, and training results for reproducibility.
+
+        Parameters
+        ----------
+        filename : str, optional
+            Custom filename (without path). If None, uses
+            'best_popularity_predictor_{model_name}.pkl'
+
+        Returns
+        -------
+        Path
+            Path to the saved model file
+
+        Raises
+        ------
+        RuntimeError
+            If no model has been trained yet
+
+        Notes
+        -----
+        The saved file contains a dictionary with keys:
+        - 'model': the trained sklearn estimator
+        - 'model_name': string identifier
+        - 'feature_names': list of feature column names
+        - 'results': full training results dictionary
+        """
         if self.best_model is None:
             raise RuntimeError("No model has been trained yet!")
-        
+
         if filename is None:
             filename = f"best_popularity_predictor_{self.best_model_name.replace(' ', '_').lower()}.pkl"
-        
+
         filepath = self.model_directory / filename
-        joblib.dump({
+
+        model_data = {
             'model': self.best_model,
-            'model_name': self.best_model_name
-        }, filepath)
-        
+            'model_name': self.best_model_name,
+            'feature_names': self.feature_names,
+            'results': self.results
+        }
+
+        joblib.dump(model_data, filepath)
         print(f"✓ Model saved to {filepath}")
+
+        return filepath
     
     def load_model(self, filepath: str) -> None:
-        """Load a saved model."""
-        data = joblib.load(filepath)
-        self.best_model = data['model']
-        self.best_model_name = data['model_name']
-        print(f"✓ Model loaded from {filepath}")
+        """
+        Load a previously saved model.
+
+        Restores the model, model name, feature names, and results
+        from a joblib-serialized file.
+
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to the saved model file (.pkl)
+
+        Raises
+        ------
+        FileNotFoundError
+            If the model file does not exist
+        RuntimeError
+            If loading fails due to file corruption or incompatibility
+        """
+        filepath = Path(filepath)
+
+        if not filepath.exists():
+            raise FileNotFoundError(f"Model file not found: {filepath}")
+
+        try:
+            data = joblib.load(filepath)
+            self.best_model = data['model']
+            self.best_model_name = data['model_name']
+            self.feature_names = data.get('feature_names')
+            self.results = data.get('results', {})
+
+            print(f"✓ Model loaded from {filepath}")
+            print(f"  Loaded model: {self.best_model_name}")
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to load model from {filepath}: {e}") from e
     
     def predict(self, X: pd.DataFrame) -> np.ndarray:
-        """Make predictions with the best model."""
+        """
+        Make predictions with the best model.
+
+        Parameters
+        ----------
+        X : pd.DataFrame
+            Features to predict, must match training feature columns
+
+        Returns
+        -------
+        np.ndarray
+            Predicted popularity values (log-transformed if trained on log streams)
+
+        Raises
+        ------
+        RuntimeError
+            If no model has been trained or loaded
+        ValueError
+            If X is not a pandas DataFrame
+        """
         if self.best_model is None:
-            raise RuntimeError("No model has been trained yet!")
-        
+            raise RuntimeError("No model has been trained or loaded yet!")
+
+        if not isinstance(X, pd.DataFrame):
+            raise ValueError("X must be a pandas DataFrame")
+
         return self.best_model.predict(X)
 
 

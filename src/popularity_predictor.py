@@ -174,7 +174,7 @@ class PopularityPredictor:
         print("TRAINING AND EVALUATING POPULARITY PREDICTION MODELS")
         print("=" * 70)
         
-        best_score = -np.inf # R² can be negative
+        best_combined_score = -np.inf # R² can be negative
         self.feature_names = list(X_train.columns)
         
         for model_name, model in self.models.items():
@@ -223,8 +223,8 @@ class PopularityPredictor:
                 
                 # Track best model using combined score (test + CV)
                 combined_score = (test_r2 + cv_scores.mean()) / 2
-                if combined_score > best_score:
-                    best_score = combined_score
+                if combined_score > best_combined_score:
+                    best_combined_score = combined_score
                     self.best_model = model
                     self.best_model_name = model_name
                 
@@ -240,10 +240,15 @@ class PopularityPredictor:
                 print(f"  Error training {model_name}: {e}")
                 print(f"  Skipping {model_name}...")
                 continue
+        best_test_r2 = results[self.best_model_name]["test_r2"]
         
-        print("\n" + "=" * 70)
-        print(f"BEST MODEL: {self.best_model_name} (R² = {best_score:.4f})")
-        print("=" * 70)
+        best_cv_mean = results[self.best_model_name]["cv_mean"]
+        print("\n" + "=" * 100)
+        print(
+            f"BEST MODEL: {self.best_model_name} "
+            f"(Test R² = {best_test_r2:.4f}, CV mean R² = {best_cv_mean:.4f}, Combined = {best_combined_score:.4f})"
+        )
+        print("=" * 100)
 
         self.results = results
         return results
@@ -636,6 +641,7 @@ class PopularityPredictor:
 
 
 if __name__ == "__main__":
+    # Example usage
     try:
         # Try relative imports when module is part of a package
         from .data_loader import DataLoader
@@ -651,5 +657,19 @@ if __name__ == "__main__":
     
     preprocessor = Preprocessor()
     X_train, X_test, y_train, y_test, features = preprocessor.preprocess_spotify(spotify)
+    
+    # Train and evaluate models
+    predictor = PopularityPredictor()
+    results = predictor.train_and_evaluate(X_train, X_test, y_train, y_test)
+    
+    # Visualize results
+    predictor.plot_model_comparison(results)
+    
+    # Plot predictions and feature importance
+    predictor.plot_predictions(y_test, results[predictor.best_model_name]['predictions'])
+    predictor.plot_feature_importance(features)
+    
+    # Save model
+    predictor.save_model()
     
  

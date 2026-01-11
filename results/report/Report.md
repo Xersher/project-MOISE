@@ -565,6 +565,8 @@ During this project, several tools and resources were utilized. Claude was used 
 project-MOISE/
 ├── PROPOSAL.md
 ├── requirements.txt
+├── AI_USAGE.md
+├── README.md
 ├── main.py
 ├── data/
 │   ├── features_3_sec.csv

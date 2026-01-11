@@ -499,30 +499,30 @@ class GenreClassifier:
 if __name__ == "__main__":
     # Example usage
     try:
-        # Try relative imports when module is part of a package
+    # Try relative imports when module is part of a package
         from .data_loader import DataLoader
         from .preprocessing import Preprocessor
     except Exception:
-        # Fallback for running as a standalone script
+    # Fallback for running as a standalone script
         from data_loader import DataLoader
         from preprocessing import Preprocessor
-    
+
     # Load and preprocess data
     loader = DataLoader('/files/project-MOISE/data')
     gtzan = loader.load_gtzan_data()
-    
+
     preprocessor = Preprocessor()
     X_train, X_test, y_train, y_test, features, le = preprocessor.preprocess_gtzan(gtzan)
-    
+
     # Train and evaluate models
     classifier = GenreClassifier()
     results = classifier.train_and_evaluate(X_train, y_train, X_test, y_test, le)
-    
+
     # Visualize results
     classifier.plot_model_comparison(results)
 
     # Obtain predictions from the trained best model and plot confusion matrix
     classifier.plot_confusion_matrix(y_test, results[classifier.best_model_name]['predictions'])
-    
+
     # Save model
     classifier.save_model()
